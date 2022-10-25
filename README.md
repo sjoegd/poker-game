@@ -1,2 +1,4 @@
 # poker-game
-Online poker 
+Poker made with React and styled-components
+
+NOT FINISHED!
