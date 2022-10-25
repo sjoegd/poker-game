@@ -10,20 +10,23 @@ import King from './types/King';
 import Queen from './types/Queen';
 import Jack from './types/Jack';
 
+import cardBack from '/cardback.png';
+
 const Container = styled.div`
-  width: 5rem;
-  height: calc(5rem * 1.4);
+  width: 6rem;
+  height: calc(6rem * 1.4);
   background: white;
-  border: solid 0.05rem black;
-  border-radius: 0.4em;
+  border: solid 0.04rem black;
+  border-radius: 0.5rem;
   display: grid;
   grid-template: 1fr / 0.175fr 1fr 0.175fr;
-  margin: 0.1rem;
+  margin: 0.125rem;
+  overflow: hidden;
 `;
 
 const Value = styled.div`
   color: ${({ color }) => color};
-  font-size: 0.9rem;
+  font-size: 1.15rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -54,6 +57,13 @@ const TypeWrapper = styled.div`
 
 const RoyalWrapper = styled.div`
   grid-area: 1 / 1 / span 8 / span 3;
+`;
+
+const Backwards = styled.div`
+  grid-area: 1 / 1 / span 8 / span 3;
+  background-image: url(${cardBack});
+  background-size: cover;
+  background-color: black;
 `;
 
 function Top(props) {
@@ -234,9 +244,15 @@ function MiddleRoyal(props) {
 export default function Card(props) {
   return (
     <Container>
-      <Top number={props.number} type={props.type} />
-      <Middle number={props.number} type={props.type} />
-      <Bottom number={props.number} type={props.type} />
+      {props.backwards ? (
+        <Backwards />
+      ) : (
+        <>
+          <Top number={props.number} type={props.type} />
+          <Middle number={props.number} type={props.type} />
+          <Bottom number={props.number} type={props.type} />
+        </>
+      )}
     </Container>
   );
 }

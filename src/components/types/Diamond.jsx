@@ -2,7 +2,6 @@ import React from 'react'
 
 function Diamond(props) {
   return (
-    // <svg fill={props.color} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M33 64.679L57.245 32 33-.679 8.755 32 33 64.679zM54.755 32L33 61.321 11.245 32 33 2.679 54.755 32z"/></svg>
     <svg fill={props.color} viewBox="0 0 127 175">
       <g
         transform="translate(0,-877.36216)">
