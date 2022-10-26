@@ -1,14 +1,14 @@
 import React from 'react';
 import styled from 'styled-components';
 
-import Spade from './types/Spade';
-import Club from './types/Club';
-import Diamond from './types/Diamond';
-import Heart from './types/Heart';
+import Spade from './card-types/Spade';
+import Club from './card-types/Club';
+import Diamond from './card-types/Diamond';
+import Heart from './card-types/Heart';
 
-import King from './types/King';
-import Queen from './types/Queen';
-import Jack from './types/Jack';
+import King from './card-types/King';
+import Queen from './card-types/Queen';
+import Jack from './card-types/Jack';
 
 import cardBack from '/cardback.png';
 

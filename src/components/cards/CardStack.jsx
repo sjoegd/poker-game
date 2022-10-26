@@ -8,6 +8,7 @@ const CardWrapper = styled.div`
   display: flex;
 `;
 
+// Change name.
 export default function CardStack(props) {
   let cards = []
 
