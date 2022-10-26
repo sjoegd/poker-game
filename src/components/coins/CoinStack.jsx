@@ -9,6 +9,7 @@ const StackContainer = styled.div`
     width: 4rem;
     rotate: ${({rotate}) => `${rotate}deg`};
     margin: 0 0.25rem;
+    z-index: ${({zIndex}) => zIndex ?? 0};
 `
 
 const CoinContainer = styled.div`
@@ -22,10 +23,10 @@ export default function CoinStack(props) {
   let coins = [];
 
   for(let i = 0; i < props.amount; i++) {
-    coins.push(<CoinContainer i={i}><Coin color={props.color} /></CoinContainer>)
+    coins.push(<CoinContainer key={i} i={i}><Coin color={props.color} /></CoinContainer>)
   }
 
   return (
-    <StackContainer rotate={props.rotate} amount={props.amount}>{coins}</StackContainer>
+    <StackContainer zIndex={props.zIndex} rotate={props.rotate} amount={props.amount}>{coins}</StackContainer>
   )
 }

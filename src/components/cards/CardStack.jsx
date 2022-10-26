@@ -13,7 +13,7 @@ export default function CardStack(props) {
   let cards = []
 
   for(let card of props.cards) {
-    cards.push(<Card number={card.number} type={card.type} backwards={card.backwards} />)
+    cards.push(<Card key={card.number + card.type} number={card.number} type={card.type} backwards={card.backwards} />)
   }
 
   return (
