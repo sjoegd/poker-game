@@ -1,9 +1,9 @@
 import React from 'react';
-import Table from './components/Table';
+import Game from './components/Game';
 
 export default function App() {
   return (
-    <Table />
+    <Game />
   );
 }
 

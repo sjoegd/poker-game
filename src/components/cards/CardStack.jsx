@@ -1,24 +1,33 @@
-import React from 'react'
+import React from 'react';
 import styled from 'styled-components';
 
 import Card from './Card';
 
-const CardWrapper = styled.div`
-  width: fit-content;
-  display: flex;
+const StackContainer = styled.div`
+  position: relative;
+  width: 6rem;
+  height: calc(1.4 * 6rem);
+
 `;
 
-// Change name.
-export default function CardStack(props) {
-  let cards = []
+const CardContainer = styled.div`
+  position: absolute;
+  left: ${({i}) => `${-i*0.025}rem`};
+  top: ${({i}) => `${-i*0.05}rem`};
+`;
 
-  for(let card of props.cards) {
-    cards.push(<Card key={card.number + card.type} number={card.number} type={card.type} backwards={card.backwards} />)
+export default function CardStack(props) {
+  let cards = [];
+
+  let i = 0
+  for (let card of props.cards) {
+    cards.push(
+      <CardContainer i={i} key={card.number + card.type}>
+        <Card number={card.number} type={card.type} backwards={card.backwards} />
+      </CardContainer>
+    );
+    i++;
   }
 
-  return (
-    <CardWrapper>
-        {cards}
-    </CardWrapper>
-  )
+  return <StackContainer>{cards}</StackContainer>;
 }

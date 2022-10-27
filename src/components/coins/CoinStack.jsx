@@ -7,7 +7,7 @@ const StackContainer = styled.div`
     position: relative;
     height: 4rem;
     width: 4rem;
-    rotate: ${({rotate}) => `${rotate}deg`};
+    rotate: ${({rotate}) => `${rotate ?? 0}deg`};
     margin: 0 0.25rem;
     z-index: ${({zIndex}) => zIndex ?? 0};
 `

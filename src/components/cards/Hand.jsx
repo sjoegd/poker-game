@@ -12,8 +12,8 @@ export default function Hand(props) {
   let [card_1, card_2] = props.cards;
   return (
     <CardWrapper>
-      <Card number={card_1.number} type={card_1.type} backwards={card_1.backwards} />
-      <Card number={card_2.number} type={card_2.type} backwards={card_2.backwards} />
+      { card_1 ? <Card number={card_1.number} type={card_1.type} backwards={card_1.backwards} /> : <></> }
+      { card_2 ? <Card number={card_2.number} type={card_2.type} backwards={card_2.backwards} /> : <></> }
     </CardWrapper>
   );
 }
