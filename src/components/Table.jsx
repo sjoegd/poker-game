@@ -9,7 +9,7 @@ import CoinStack from './coins/CoinStack';
 
 const TableContainer = styled.div`
   height: 60rem;
-  width: 84rem;
+  width: 84rem; // 1.4*height
   border-radius: 50%;
   background: linear-gradient(216deg, rgba(53, 101, 77, 1) 1%, rgba(62, 149, 106, 1) 83%);
   box-shadow: -0.1rem 0 0.8rem 0 rgba(0, 0, 0, 1);
@@ -46,7 +46,6 @@ const CoinStackContainer = styled.div`
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  height: 100%;
 `;
 
 const CardStackContainer = styled.div`
@@ -57,14 +56,21 @@ const CardStackContainer = styled.div`
   margin-bottom: 2rem;
 `;
 
-
 function PlayerHand(props) {
   let { playerCoins, playerHand } = props.playerHand;
 
   return (
     <HandContainer row={props.row} column={props.column} rotate={props.rotate}>
+      {props.bigBlind ? "BB" : ""}
+      {props.smallBlind ? "SB" : ""}
+      {props.turn ? "Turn" : ""}
       <CoinStackContainer>
-        <CoinStack zIndex={props.fixZIndex ? 4 : 0} rotate={-props.rotate} amount={playerCoins.black} color={'black'} />
+        <CoinStack 
+          zIndex={props.fixZIndex ? 4 : 0} 
+          rotate={-props.rotate} 
+          amount={playerCoins.black} 
+          color={'black'} 
+        />
         <CoinStack
           zIndex={props.fixZIndex ? 3 : 0}
           rotate={-props.rotate}
@@ -84,13 +90,14 @@ function PlayerHand(props) {
           color={'darkred'}
         />
       </CoinStackContainer>
+      {`Total: ${props.coinValues.total} `}
+      {`Bet: ${props.coinValues.bet}`}
       <Hand cards={playerHand} />
     </HandContainer>
   );
 }
 
 function TableMiddle(props) {
-
   return (
     <MiddleContainer row={props.row} column={props.column}>
       <CoinStackContainer>
@@ -100,14 +107,11 @@ function TableMiddle(props) {
         <CoinStack amount={props.coinStack.darkred} color={'darkred'} />
       </CoinStackContainer>
       <CardRiverContainer>
-        <CardRiver
-          cards={props.cardRiver}
-        />
+        <CardRiver cards={props.cardRiver} />
       </CardRiverContainer>
     </MiddleContainer>
   );
 }
-
 
 /**
  * Input:
@@ -115,21 +119,60 @@ function TableMiddle(props) {
  * cardStack = []
  * cardRiver = [] max 5
  * coinStack = playerCoins
- * 
+ * coinValues = [4 * {bet, total}]
+ * smallBlind = id
+ * bigBlind = id
+ * turn = id
  * @returns The Table UI
  */
 
 export default function Table(props) {
-  
   return (
     <TableContainer>
       <CardStackContainer row={1} column={1}>
         <CardStack cards={props.cardStack} />
       </CardStackContainer>
-      <PlayerHand row={3} column={2} rotate={0} playerHand={props.players[0]} />
-      <PlayerHand row={2} column={1} rotate={90} playerHand={props.players[1]} />
-      <PlayerHand row={1} column={2} rotate={180} playerHand={props.players[2]} />
-      <PlayerHand row={2} column={3} rotate={270} playerHand={props.players[3]} fixZIndex={true} />
+      <PlayerHand
+        bigBlind={props.bigBlind == 0}
+        smallBlind={props.smallBlind == 0}
+        turn={props.turn == 0}
+        coinValues={props.coinValues[0]}
+        row={3}
+        column={2}
+        rotate={0}
+        playerHand={props.players[0]}
+      />
+      <PlayerHand
+        bigBlind={props.bigBlind == 1}
+        smallBlind={props.smallBlind == 1}
+        turn={props.turn == 1}
+        coinValues={props.coinValues[1]}
+        row={2}
+        column={1}
+        rotate={90}
+        playerHand={props.players[1]}
+      />
+      <PlayerHand
+        bigBlind={props.bigBlind == 2}
+        smallBlind={props.smallBlind == 2}
+        turn={props.turn == 2}
+        coinValues={props.coinValues[2]}
+        row={1}
+        column={2}
+        rotate={180}
+        playerHand={props.players[2]}
+      />
+      <PlayerHand
+        bigBlind={props.bigBlind == 3}
+        smallBlind={props.smallBlind == 3}
+        turn={props.turn == 3}
+        coinValues={props.coinValues[3]}
+        row={2}
+        column={3}
+        rotate={270}
+        playerHand={props.players[3]}
+        fixZIndex={true}
+      />
       <TableMiddle row={2} column={2} cardRiver={props.cardRiver} coinStack={props.coinStack} />
     </TableContainer>
   );

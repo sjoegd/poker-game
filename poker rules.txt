@@ -1,0 +1,53 @@
+Elke round is er een
+SB (smallBlind) en een BB (bigBlind)
+
+bigBlind links van smallBlind
+bigBlind moet hele minimum chip ingooien
+smallBlind moet de helft ervan ingooien
+
+dan worden de kaarten gedrawed
+eerste kaart wordt geburned (weggelegd)
+en elk persoon krijgt 2 kaarten
+en 3 kaarten dicht in het midden
+
+dan gaat de turn naar de player in EP: links van BB
+die mag: FOLD, CALL of RAISE
+waar FOLD: opgeven, verwijder kaarten en mag geen turn meer, money in de pot
+waar CALL: match de current chips 
+waar RAISE: leg nieuw aantal neer: minimaal double van de chips nu.
+
+Dit door totdat iedereen of gecalled of gefolded heeft (en iemand over (laatste person mag niet folden))
+
+Als het doorgaat oftewel er zijn nog 2+ mensen over met de vorige regels:
+Turn de flop (3 kaarten in het midden)
+
+Starter is nu de persoon meest dichtbij (vanaf links tellend) van de SB
+Er is geen forced bet nu, dus er mag gechecked worden (call op niks)
+Nu zijn de opties:
+Call (check bij geen nieuwe bet)
+Bet/Raise (Bet bij eerste, raise bij omhoog)
+Fold
+
+dan als de ronde voorbij is, zelfde regels eerst
+
+Gooi een extra kaart bij t midden
+
+weer zelfde als ronde hiervoor
+
+Als die voorbij is, zelfde regels
+
+weer een extra kaart (de river card (laatste))
+
+nu weer betten callen raisen en folden totdat of iedereen tzelfde heeft nadat iedereen turn gehad heeft of er is nog maar 1 over (die krijgt pot)
+
+als deze ronde voorbij is worden de kaarten open gegooid (het einde)
+
+en wordt de winnaar berekend met de regels voor hands en krijgt de winnaar de pot
+
+Edge cases:
+Als in de rondes voordat er al 5 kaarten liggen all-in wordt gegaan er blijft meer dan 1 persoon over gaat het meteen naar het einde met 5 kaarten en checken
+
+
+
+
+
