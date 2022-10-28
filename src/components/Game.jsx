@@ -46,15 +46,13 @@ let coinValues = {
 };
 
 let coinTypes = ['black', 'darkblue', 'darkgreen', 'darkred'];
-// playerStates = ['waiting', 'folded', 'mustRaise']
+
+// playerStates = ['noturn', 'folded', 'waiting', 'mustRaise']
+
+// cycleOrder = ['beginning', 'round1', 'round2', 'round3', 'finished']
+// beginning: 3 mid cards closed, round1 open mid 3 cards, round2 add open 4th card, round3 add open 5th card, finished everyone left shows hand and winner determined
 
 /**
- * TODO:
- *  Make sure every functions follows the following rules:
- *  Every state accessed in in the function and called functions in that functions
- *  should be copied at the start of the function and set at the end of the function
- *  any helper functions should be given the copy of the states
- * 
  * @returns Component that manages the Game
  */
 export default function Game() {
@@ -72,10 +70,10 @@ export default function Game() {
   let [player3Bet, setPlayer3Bet] = useState(0);
   let [player4Bet, setPlayer4Bet] = useState(0);
 
-  let [player1State, setPlayer1State] = useState('waiting');
-  let [player2State, setPlayer2State] = useState('waiting');
-  let [player3State, setPlayer3State] = useState('waiting');
-  let [player4State, setPlayer4State] = useState('waiting');
+  let [player1State, setPlayer1State] = useState('noturn');
+  let [player2State, setPlayer2State] = useState('noturn');
+  let [player3State, setPlayer3State] = useState('noturn');
+  let [player4State, setPlayer4State] = useState('noturn');
 
   let playerIDs = {
     0: { player: player1, setPlayer: setPlayer1 , playerBet: player1Bet, setPlayerBet: setPlayer1Bet, playerState: player1State, setPlayerState: setPlayer1State },
@@ -90,6 +88,8 @@ export default function Game() {
 
   let [minimalBet, setMinimalBet] = useState(10);
   let [currentBet, setCurrentBet] = useState(0);
+
+  let [currentCycle, setCurrentCycle] = useState(0); 
 
   let [startDisabled, setStartDisabled] = useState(false);
 
@@ -119,9 +119,9 @@ export default function Game() {
       >
         Start
       </StartButton>
-      <FoldButton onClick={() => handleFold({id: currentTurn})}>Fold</FoldButton>
-      <CallButton onClick={() => handleCall({id: currentTurn})}>Call</CallButton>
-      <RaiseButton onClick={() => handleRaise({id: currentTurn, amount: minimalBet*2})}>Raise</RaiseButton>
+      <FoldButton onClick={() => handleTurn(currentTurn, 'fold')}>Fold</FoldButton>
+      <CallButton onClick={() => handleTurn(currentTurn, 'call')}>Call</CallButton>
+      <RaiseButton onClick={() => handleTurn(currentTurn, 'raise', minimalBet*2)}>Raise</RaiseButton>
     </>
   );
 
@@ -234,76 +234,106 @@ export default function Game() {
     return total;
   }
 
-  // should make copies of playerStates, update them and give them to handleTurnFinish
-  function handleFold({id}) {
-    let {setPlayerState} = playerIDs[id];
-    setPlayerState("folded");
-    handleTurnFinish({oldID: id});
-  }
+  function handleTurn(id, move, amount) {
+    let currentCoinStack = {...coinStack};
+    let {player, setPlayer, playerBet, playerState, setPlayerState} = playerIDs[id];
 
-  // should make copies of playerStates, update them and give them to handleTurnFinish
-  function handleCall({id}) {
-    let currentCoinStack = {...coinStack}
-    let {player, playerBet} = playerIDs[id];
-    let {playerCoins} = player;
-    let left = currentBet - playerBet;
-
-    getChips(currentCoinStack, playerCoins, left, id); // shouldn't acces playerCoins directly, should copy it and setPlayer afterwards
-
-    let {setPlayerState} = playerIDs[id];
-    setPlayerState("waiting");
-
-    setCoinStack(currentCoinStack);
-    handleTurnFinish({oldID: id});
-  }
-
-  // should make copies of playerStates, update them and give them to handleTurnFinish
-  function handleRaise({id, amount}) {
-    let currentCoinStack = {...coinStack}
-    let {player, playerBet} = playerIDs[id];
-    let {playerCoins} = player;
-    let newBet = currentBet + amount;
-    let left = newBet - playerBet;
-
-    getChips(currentCoinStack, playerCoins, left, id)
-
+    let otherPlayerStates = []
     for(let i = 0; i < 4; i++) {
-      let {playerState, setPlayerState} = playerIDs[i];
-      if(i == id || playerState == "folded") {
+      if(i == id) {
         continue;
       }
-      setPlayerState("mustRaise");
+
+      let {playerState: otherPlayerState, setPlayerState: setOtherPlayerState} = playerIDs[i];
+      otherPlayerStates.push({id: i, playerState: otherPlayerState,  setPlayerState: setOtherPlayerState})
     }
 
-    setCoinStack(currentCoinStack);
-    setCurrentBet(newBet);
-    handleTurnFinish({oldID: id});
+    let currentPlayer = {...player};
+    let currentPlayerBet = {playerBet}; // make object of them so that it copies by reference
+    let currentPlayerState = {playerState}; 
+    let {playerCoins, playerHand} = currentPlayer;
+
+    switch(move) {
+      case 'fold':
+        handleFold(currentPlayerState);
+        break;
+      case 'call':
+        handleCall(id, currentCoinStack, currentPlayerState, playerCoins, currentPlayerBet);
+        break;
+      case 'raise':
+        handleRaise(id, currentCoinStack, currentPlayerState, playerCoins, currentPlayerBet, otherPlayerStates, amount);
+        break;
+    }
+
+    setCoinStack(currentCoinStack)
+    setPlayer({playerCoins, playerHand});
+    setPlayerState(currentPlayerState.playerState)
+
+    for(let {playerState: otherPlayerState,  setPlayerState: setOtherPlayerState} of otherPlayerStates) {
+      setOtherPlayerState(otherPlayerState);
+    }
+
+    handleTurnFinish(id, [...otherPlayerStates, {id, playerState: currentPlayerState.playerState, setPlayerState}]);
   }
 
-  // since functions calling this update playerStates
-  // it must get them as a copied updated values and give that to getNotFoldedPlayers
-  // to make sure it uses the correct updated value
-  function handleTurnFinish({oldID}) {
-    let playersLeft = getNotFoldedPlayers();
-    // handle round finish if == 1...
-    // and check whether cycle has finished
+  function handleFold(currentPlayerState) {
+    currentPlayerState.playerState = "folded";
+  }
+
+  function handleCall(id, currentCoinStack, currentPlayerState, playerCoins, currentPlayerBet) {
+    let left = currentBet - currentPlayerBet.playerBet;
+    getChips(currentCoinStack, playerCoins, left, id);
+    currentPlayerState.playerState = "waiting";
+  }
+
+  function handleRaise(id, currentCoinStack, currentPlayerState, playerCoins, currentPlayerBet, otherPlayerStates, amount) {
+
+    let newBet = currentBet + amount;
+    let left = newBet - currentPlayerBet.playerBet;
+
+    getChips(currentCoinStack, playerCoins, left, id);
+    setCurrentBet(newBet);
+
+    for(let otherPlayerState of otherPlayerStates) {
+      if(otherPlayerState.playerState != "folded") {
+        otherPlayerState.playerState = "mustRaise"
+      }
+    }
+
+    currentPlayerState.playerState = "waiting";
+  }
+
+
+  function handleTurnFinish(id, playerStates) {
+    let playersLeft = getNotFoldedPlayerIDs(playerStates);
+    
+    // Check if round is over and handle it
+    let roundDone = playersLeft < 2;
+    
+    // Check if were done with this cycle and handle it
+    let cycleDone = true;
+    for(let {playerState} of playerStates) {
+      if(playerState == "mustRaise" || playerState == "noturn") {
+        cycleDone = false;
+      }
+    }
 
     // get closest next player and set turn to that player
     for(let i = 1; i < 4; i++) {
-      let id = (oldID + i) % 4
-      if(playersLeft.includes(id)) {
-        setCurrentTurn(id)
+      let currentId = (id + i) % 4
+      if(playersLeft.includes(currentId)) {
+        setCurrentTurn(currentId)
         break;
       }
     }
   }
 
-  function getNotFoldedPlayers() {
+  function getNotFoldedPlayerIDs(playerStates) {
     let playersLeft = [];
     for(let i = 0; i < 4; i++) {
-      let {playerState} = playerIDs[i]
+      let {id, playerState} = playerStates[i]
       if(playerState != "folded") {
-        playersLeft.push(i)
+        playersLeft.push(id)
       }
     }
     return playersLeft;
