@@ -49,9 +49,6 @@ let coinTypes = ['black', 'darkblue', 'darkgreen', 'darkred'];
 
 // playerStates = ['noturn', 'folded', 'waiting', 'mustRaise']
 
-// cycleOrder = ['beginning', 'round1', 'round2', 'round3', 'finished']
-// beginning: 3 mid cards closed, round1 open mid 3 cards, round2 add open 4th card, round3 add open 5th card, finished everyone left shows hand and winner determined
-
 /**
  * @returns Component that manages the Game
  */
@@ -147,6 +144,12 @@ export default function Game() {
       let { playerCoins, playerHand } = currentPlayer;
 
       let [card1, card2] = [currentCardStack.pop(), currentCardStack.pop()];
+
+      if(id == 0) {
+        card1.backwards = false;
+        card2.backwards = false;
+      }
+
       playerHand.push(card1, card2);
 
       if (id == smallBlind) {
@@ -306,9 +309,14 @@ export default function Game() {
 
   function handleTurnFinish(id, playerStates) {
     let playersLeft = getNotFoldedPlayerIDs(playerStates);
-    
+
     // Check if round is over and handle it
-    let roundDone = playersLeft < 2;
+    let roundDone = playersLeft.length == 1;
+
+    if(roundDone) {
+      endRound(playersLeft[0])
+      return;
+    }
     
     // Check if were done with this cycle and handle it
     let cycleDone = true;
@@ -316,6 +324,11 @@ export default function Game() {
       if(playerState == "mustRaise" || playerState == "noturn") {
         cycleDone = false;
       }
+    }
+
+    if(cycleDone) {
+      handleCycleFinish(currentCycle, playersLeft);
+      return; 
     }
 
     // get closest next player and set turn to that player
@@ -337,6 +350,160 @@ export default function Game() {
       }
     }
     return playersLeft;
+  }
+
+  function handleCycleFinish(oldCycle, playersLeft) {
+    // cycleOrder = ['beginning', 'round1', 'round2', 'round3', 'finished']
+    // beginning: 3 mid cards closed, round1 open mid 3 cards, round2 add open 4th card, round3 add open 5th card, finished everyone left shows hand and winner determined
+
+    let currentCardRiver = [...cardRiver]
+    let currentCardStack = [...cardStack]
+
+    for(let id of playersLeft) {
+      let {setPlayerState} = playerIDs[id];
+      setPlayerState('noturn')
+    }
+
+    switch(oldCycle) {
+      case 0:
+        // open 3 mid cards, then start new cycle
+        flipRiverCards(currentCardRiver, false, 3);
+        setCardRiver(currentCardRiver);
+        startNewCycle(oldCycle, playersLeft);
+        break;
+      case 1:
+        // add 4th card, start new cycle
+        drawRiverCards(1, currentCardRiver, currentCardStack);
+        flipRiverCards(currentCardRiver, false, 4);
+        setCardRiver(currentCardRiver);
+        setCardStack(currentCardStack);
+        startNewCycle(oldCycle, playersLeft);
+        break;
+      case 2:
+        // add 5th card, start new cycle
+        drawRiverCards(1, currentCardRiver, currentCardStack);
+        flipRiverCards(currentCardRiver, false, 5);
+        setCardRiver(currentCardRiver);
+        setCardStack(currentCardStack);
+        startNewCycle(oldCycle, playersLeft);
+        break;
+      case 3:
+        // Game is finished, determine winner end round
+        //...
+    }
+  }
+
+
+  function startNewCycle(oldCycle, playersLeft) {
+    // give turn to correct player:
+    for(let i = smallBlind; i < smallBlind + 4; i++) {
+      if(playersLeft.includes(i % 4)) {
+        setCurrentTurn(i);
+        break;
+      }
+    }
+
+    setCurrentCycle(oldCycle + 1);
+  }
+
+  // add handling same rank and ties, playersLeft must be > 0
+  function determineWinner(playersLeft, currentCardRiver) {
+    // determine winner of playersLeft with their current playerHand and the currentCardRiver
+    // get highest ranking for each player, take the playerID with the highest rank and return it
+    let playerRankings = [];
+
+    for(let player of playersLeft) {
+      let {player: {playerHand}} = playerIDs[player];
+      let highestRank = getHighestRank(playerHand, currentCardRiver);
+      playerRankings.push({id: player, highestRank});
+    }
+
+    let winner = playerRankings[0]
+    for(let player of playerRankings) {
+      if(player.highestRank > winner.highestRank) {
+        winner = player
+      }
+    }
+    
+    return winner.id
+  }
+
+  function getHighestRank(playerHand, currentCardRiver) {
+    let fullHand = [...playerHand, ...currentCardRiver];
+    // use the evaluateHand function
+  }
+
+  // not certain whether the state variables will be correct here...
+  function endRound(winnerId) {
+    // clean up everything and prepare for next round
+
+    let currentCoinStack = {...coinStack};
+    let currentCardRiver = [...cardRiver];
+    let currentCardStack = [...cardStack];
+
+    let players = []
+
+    for(let i = 0; i < 4; i++) {
+      let {player, setPlayer , playerBet, setPlayerBet, playerState, setPlayerState} = playerIDs[i];
+      players.push({player, setPlayer , playerBet, setPlayerBet, playerState, setPlayerState});
+    }
+
+    // give winner the coinStack and remove his cards, clear the coinStack
+    let {player, setPlayer} = players[winnerId];
+    let {playerCoins, playerHand} = player;
+
+    for(let coinType of coinTypes) {
+      playerCoins[coinType] += currentCoinStack[coinType];
+      currentCoinStack[coinType] = 0;
+    }
+
+    playerHand = [];
+
+    setPlayer({playerCoins, playerHand});
+
+    // clear cardRiver and remake the cardStack
+
+    currentCardRiver = [];
+    currentCardStack = shuffleCardStack(getFreshCardStack());
+    setCardRiver(currentCardRiver);
+    setCardStack(currentCardStack);
+    setCoinStack(currentCoinStack);
+
+    // for all the players expect winner, keep their coinStack but remove the cards
+
+    for(let i = 0; i < 4; i++) {
+
+      // clear bets and state
+      let {setPlayerBet, setPlayerState} = players[i];
+
+      setPlayerBet(0);
+      setPlayerState('noturn');
+
+      // not winner
+      if(i == winnerId) {
+        continue;
+      }
+
+      let {player, setPlayer} = players[i];
+      let {playerCoins} = player;
+
+      setPlayer({playerCoins, playerHand: []})
+    }
+
+    // update smallBlind, bigBlind and currentTurn respectively
+    setSmallBlind((smallBlind + 1) % 4);
+    setBigBlind((bigBlind + 1) % 4);
+    setCurrentTurn((bigBlind + 2) % 4)
+
+    // clear the minimalBet and currentBet
+    setMinimalBet(10);
+    setCurrentBet(0);
+
+    // clear currentCycle
+    setCurrentCycle(0);
+
+    // set startDisabled to false
+    setStartDisabled(false);
   }
 
 }
@@ -374,4 +541,102 @@ function shuffleCardStack(cardStack) {
   }
 
   return cardStack;
+}
+
+// Methods for hand evaluation
+
+// lower = better rank
+let numberRanking = {
+  'A': 1,
+  'K': 2,
+  'Q': 3,
+  'J': 4,
+  10: 5,
+  9: 6,
+  8: 7,
+  7: 8,
+  6: 9,
+  5: 10,
+  4: 11,
+  3: 12,
+  2: 13,
+}
+
+function evaluateHand(hand) {
+
+  // make sets of 5 out the 7 element in hand (combinations)
+  // for each check from isRoyalFlush to highestCard, then get the hand with highest ranking, return that ranking
+
+  // Yes that means it will be enumerated 21 times.. which might not be optimal
+  // optimizations can be made for that ^
+  // royalFlush for example can be checked instantly with the 7 cards
+  // same with 4 of a kind
+  // and maybe others
+  // but to check a straight flush, a straight might be present and a flush but not of the same sample of 5..
+  // so they can only be checked for a certain sample of 5 so each sample has to be checked.
+
+}
+
+function isRoyalFlush(numbersOfType) {
+
+  let royalFlushNumbers = ['A', 'K', 'Q', 'J', '10']
+
+  for(let type of cardTypes) {
+    let numbers = numbersOfType.get(type);
+    let typeHasRoyalFlush = true;
+    for(let royalNumber of royalFlushNumbers) {
+      if(!numbers.includes(royalNumber)) {
+        typeHasRoyalFlush = false
+      }
+    }
+    if(typeHasRoyalFlush) {
+      return true;
+    }
+  }
+
+  return false
+}
+
+function isStraightFlush(numbersOfType) {
+
+}
+
+function isFourOfAKind(cardNumbers) {
+
+}
+
+function isFullHouse(cardTypes, cardNumbers) {
+  // three of kind and pair
+
+}
+
+function isFlush(cardTypes, cardNumbers) {
+
+  // for every type check whether the lenght of numbers of that type >= 5, if yes then return 
+
+}
+
+function isStraight(numbers) {
+
+  // sort and remove duplicates, start of array is highest ranked element
+  // A's should be evaluated both as highest ranked and as lowest in distinct evals
+  // start checking for straight and if a straight is found return it, if not found return empty array.
+
+}
+
+// same code as pair
+function isThreeOfAKind(countOfNumber, avoidedNumbers = []) {
+
+}
+
+function isTwoPair() {
+
+}
+
+function isPair() {
+
+}
+
+function HighCard(numbers) {
+
 }
