@@ -33,17 +33,17 @@ let cardTypes = ['club', 'heart', 'diamond', 'spade'];
 let cardNumbers = ['A', 2, 3, 4, 5, 6, 7, 8, 9, 10, 'J', 'Q', 'K'];
 
 let baseCoins = {
-  black: 2,
+  black: 1,
   darkblue: 4,
-  darkgreen: 6,
-  darkred: 25,
+  darkgreen: 8,
+  darkred: 12,
 };
 
 let coinValues = {
-  black: 100,
-  darkblue: 50,
-  darkgreen: 10,
-  darkred: 5,
+  black: 1000,
+  darkblue: 750,
+  darkgreen: 500,
+  darkred: 250,
 };
 
 let coinTypes = ['black', 'darkblue', 'darkgreen', 'darkred'];
@@ -87,26 +87,23 @@ export default function Game() {
   let [bigBlind, setBigBlind] = useState((smallBlind + 1) % 4);
   let [currentTurn, setCurrentTurn] = useState((bigBlind + 1) % 4);
 
-  let [minimalBet, setMinimalBet] = useState(10);
-  let [currentBet, setCurrentBet] = useState(10);
+  let [minimalBet, setMinimalBet] = useState(coinValues['darkred']*2);
+  let [currentBet, setCurrentBet] = useState(0);
 
   let [currentCycle, setCurrentCycle] = useState(0); 
 
   let [startDisabled, setStartDisabled] = useState(false);
 
-  // Bot testing
+  // Bots
 
   // special variable to make sure useEffect listens correctly
   let [botListener, setBotListener] = useState(true);
 
-  // * For automatic turns by 'bots' useEffect listening to currentTurn with a delay on a turn chosen by the 'bot' might be nice
+  // Automatic turns when turn is not for the player
   useEffect(() => {
     if(currentTurn % 4 != 0 & startDisabled) {
-      setTimeout(() => handleTurn(currentTurn, 'call'), 1000)
+      setTimeout(() => generateRandomTurnAction(), 1000)
     }
-    // if(startDisabled) {
-    //   setTimeout(() => handleTurn(currentTurn, 'call'), 50)
-    // }
   }, [currentTurn, startDisabled, botListener])
 
   return (
@@ -131,7 +128,6 @@ export default function Game() {
         onClick={() => {
           startNewRound();
           setStartDisabled(true);
-          console.clear();
         }}
       >
         Start
@@ -150,7 +146,7 @@ export default function Game() {
       </CallButton>
       <RaiseButton 
         disabled={currentTurn != 0 || !startDisabled}
-        onClick={() => handleTurn(currentTurn, 'raise', 50)}
+        onClick={() => handleTurn(currentTurn, 'raise', currentBet ? currentBet * 2 : minimalBet)}
       >
         Raise
       </RaiseButton>
@@ -224,45 +220,60 @@ export default function Game() {
   }
 
   // FIX!
+  // take amount from playerCoins and give it to currentCoinStack
   function getChips(currentCoinStack, playerCoins, amount, id) {
 
-    function notEnough(left) {
-      let has = getTotalChips({ playerCoins });
-      return has < left;
+    let totalRedCoinsPlayer = 0
+    let redValue = coinValues['darkred']
+
+    // calculate totalCoinValue in reds
+    // and take all players coins
+
+    for(let coinType of coinTypes) {
+      let coinValue = coinValues[coinType]
+      totalRedCoinsPlayer += playerCoins[coinType] * (coinValue / redValue)
+      playerCoins[coinType] = 0;
     }
 
-    let currentAmount = 0;
-    let usedPlayerCoins = {
-      black: 0,
-      darkblue: 0,
-      darkgreen: 0,
-      darkred: 0,
-    };
 
-    // make sure player has the right coins otherwise this will infinite loop
-    // POSSIBLE FIX: Only calculate in terms of the smallest chip and transfer back when giving / taking
-    while (currentAmount < amount && !notEnough(amount - currentAmount)) {
-      for (let coinType of coinTypes) {
-        if(playerCoins[coinType] < 1) {
-          continue; // maybe a mechanism that checks whether coins can be traded?
-        }
+    let redCoinsTaken = 0
+    let redCoinsToGiveStack = amount / redValue
+    
+    // give correct coins to stack
 
+    while(redCoinsToGiveStack > 0 && totalRedCoinsPlayer - redCoinsTaken >= redCoinsToGiveStack) {
+      let amountToGiveLeft = redValue * redCoinsToGiveStack
+      for(let coinType of coinTypes) {
         let coinValue = coinValues[coinType];
-        if (coinValue <= amount - currentAmount) {
-          usedPlayerCoins[coinType] += 1;
-          playerCoins[coinType] -= 1;
-          currentAmount += coinValue;
+        if(coinValue <= amountToGiveLeft) {
+          currentCoinStack[coinType] += 1
+          redCoinsToGiveStack -= coinValue / redValue
+          redCoinsTaken += coinValue / redValue
+          break;
         }
       }
     }
 
-    for (let coinType of coinTypes) {
-      currentCoinStack[coinType] += usedPlayerCoins[coinType];
+    // give back correct coins to player
+
+    totalRedCoinsPlayer -= redCoinsTaken
+
+    while(totalRedCoinsPlayer > 0) {
+      let amountToGiveLeft = redValue * totalRedCoinsPlayer
+      for(let coinType of coinTypes) {
+        let coinValue = coinValues[coinType];
+        if(coinValue <= amountToGiveLeft) {
+          playerCoins[coinType] += 1
+          totalRedCoinsPlayer -= coinValue / redValue
+          break;
+        }
+      }
     }
 
     // update id's current bet.
     let {playerBet, setPlayerBet} = playerIDs[id];
-    setPlayerBet(playerBet + currentAmount);
+    setPlayerBet(playerBet + redCoinsTaken*redValue);
+    
   }
 
   function getTotalChips({ playerCoins }) {
@@ -537,7 +548,7 @@ export default function Game() {
     setBotListener(!botListener) // temp
 
     // clear the minimalBet and currentBet
-    setMinimalBet(10);
+    setMinimalBet(coinValues['darkred']*2);
     setCurrentBet(0);
 
     // clear currentCycle
@@ -563,7 +574,7 @@ export default function Game() {
         console.log(`${currentTurn} called`)
         break;
       case 3:
-        handleTurn(currentTurn, 'raise', minimalBet*2);
+        handleTurn(currentTurn, 'raise', currentBet ? currentBet * 2 : minimalBet);
         console.log(`${currentTurn} raised`)
         break;
     }
@@ -657,10 +668,10 @@ function generateCombinations(elementsLeft, currentArray, wantedArraySize, stora
   let element = newElementsLeft.shift();
 
   let newCurrentArrayLeft = [...currentArray, element]
-  let newcurrentArrayRight = [...currentArray]
+  let newCurrentArrayRight = [...currentArray]
 
   generateCombinations(newElementsLeft, newCurrentArrayLeft, wantedArraySize, storage)
-  generateCombinations(newElementsLeft, newcurrentArrayRight, wantedArraySize, storage)
+  generateCombinations(newElementsLeft, newCurrentArrayRight, wantedArraySize, storage)
 }
 
 // returns true if a > b, false if a < b
@@ -781,7 +792,7 @@ function isFourOfAKind(hand, handNumbers, handTypes) {
 // expects sorted hand based on rank small > big (A, K, Q .. )
 function isFullHouse(hand, handNumbers, handTypes) {
   // three of kind and pair
-  return (isThreeOfAKind([...hand.slice(0, 3)], [...handNumbers.slice(0, 3)]) && isPair([...hand.slice(3, 5)], [...handNumbers.slice(0, 3)])) || 
+  return (isThreeOfAKind([...hand.slice(0, 3)], [...handNumbers.slice(0, 3)]) && isPair([...hand.slice(3, 5)], [...handNumbers.slice(3, 5)])) || 
          (isPair([...hand.slice(0,2)], [...handNumbers.slice(0, 2)]) && isThreeOfAKind([...hand.slice(2, 5)], [...handNumbers.slice(2, 5)]))
 }
 
