@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useEffect } from 'react';
 import styled from 'styled-components';
 
 import Table from './Table';
@@ -35,7 +36,7 @@ let baseCoins = {
   black: 2,
   darkblue: 4,
   darkgreen: 6,
-  darkred: 50,
+  darkred: 25,
 };
 
 let coinValues = {
@@ -87,11 +88,26 @@ export default function Game() {
   let [currentTurn, setCurrentTurn] = useState((bigBlind + 1) % 4);
 
   let [minimalBet, setMinimalBet] = useState(10);
-  let [currentBet, setCurrentBet] = useState(0);
+  let [currentBet, setCurrentBet] = useState(10);
 
   let [currentCycle, setCurrentCycle] = useState(0); 
 
   let [startDisabled, setStartDisabled] = useState(false);
+
+  // Bot testing
+
+  // special variable to make sure useEffect listens correctly
+  let [botListener, setBotListener] = useState(true);
+
+  // * For automatic turns by 'bots' useEffect listening to currentTurn with a delay on a turn chosen by the 'bot' might be nice
+  useEffect(() => {
+    if(currentTurn % 4 != 0 & startDisabled) {
+      setTimeout(() => handleTurn(currentTurn, 'call'), 1000)
+    }
+    // if(startDisabled) {
+    //   setTimeout(() => handleTurn(currentTurn, 'call'), 50)
+    // }
+  }, [currentTurn, startDisabled, botListener])
 
   return (
     <>
@@ -115,13 +131,29 @@ export default function Game() {
         onClick={() => {
           startNewRound();
           setStartDisabled(true);
+          console.clear();
         }}
       >
         Start
       </StartButton>
-      <FoldButton onClick={() => handleTurn(currentTurn, 'fold')}>Fold</FoldButton>
-      <CallButton onClick={() => handleTurn(currentTurn, 'call')}>Call</CallButton>
-      <RaiseButton onClick={() => handleTurn(currentTurn, 'raise', minimalBet*2)}>Raise</RaiseButton>
+      <FoldButton 
+        disabled={currentTurn != 0 || !startDisabled}
+        onClick={() => handleTurn(currentTurn, 'fold')}
+      >
+        Fold
+      </FoldButton>
+      <CallButton 
+        disabled={currentTurn != 0 || !startDisabled}
+        onClick={() => handleTurn(currentTurn, 'call')}
+      >
+        Call
+      </CallButton>
+      <RaiseButton 
+        disabled={currentTurn != 0 || !startDisabled}
+        onClick={() => handleTurn(currentTurn, 'raise', 50)}
+      >
+        Raise
+      </RaiseButton>
     </>
   );
 
@@ -191,6 +223,7 @@ export default function Game() {
     currentCardStack.pop();
   }
 
+  // FIX!
   function getChips(currentCoinStack, playerCoins, amount, id) {
 
     function notEnough(left) {
@@ -340,6 +373,7 @@ export default function Game() {
       let currentId = (id + i) % 4
       if(playersLeft.includes(currentId)) {
         setCurrentTurn(currentId);
+        setBotListener(!botListener) // temp
         break;
       }
     }
@@ -404,6 +438,7 @@ export default function Game() {
       let currentId = (i) % 4
       if(playersLeft.includes(currentId)) {
         setCurrentTurn(currentId);
+        setBotListener(!botListener) // temp
         break;
       }
     }
@@ -419,27 +454,22 @@ export default function Game() {
       let {player: {playerHand}} = playerIDs[player];
       let highestHand = getHighestHand(playerHand, currentCardRiver);
       playerRankings.push({id: player, highestHand});
-      console.log(highestHand)
     }
 
     // Comparison should be different: look evaluateHand()
 
     let winner = playerRankings[0]
     for(let player of playerRankings) {
-      if(player.highestHand.rank == winner.highestHand.rank && numberRanking[player.highestHand.highestCard.number] < numberRanking[winner.highestHand.highestCard.number]) {
-        winner = {...player};
-      } else if (player.highestHand.rank < winner.highestHand.rank) {
-        winner = {...player};
-      }
+      if(compareHandInfos(player.highestHand, winner.highestHand)) {
+        winner = {...player}
+      } 
     }
 
-    console.log(winner)
     return winner.id
   }
 
   function getHighestHand(playerHand, currentCardRiver) {
     let fullHand = [...playerHand, ...currentCardRiver];
-    console.log(fullHand);
     return evaluateHand(fullHand);
   }
 
@@ -504,6 +534,7 @@ export default function Game() {
     setSmallBlind((smallBlind + 1) % 4);
     setBigBlind((bigBlind + 1) % 4);
     setCurrentTurn((bigBlind + 2) % 4)
+    setBotListener(!botListener) // temp
 
     // clear the minimalBet and currentBet
     setMinimalBet(10);
@@ -595,25 +626,18 @@ let numberRanking = {
 
 function evaluateHand(hand) {
 
-  // make sets of 5 out the 7 element in hand (combinations)
+  // make sets of 5 out the 7 element in hand (combinations (21 of them))
   // for each check from isRoyalFlush to isPair, then get the hand with highest ranking, return that ranking
 
   let allHands = [];
   generateCombinations(sortHand(hand), [], 5, allHands);
   let highestHandInfo = {rank: getHighestRank(allHands[0]), cards: allHands[0], highestCard: getHighestCard(allHands[0])}
 
+  // currentHand should be sorted automatically since the main hand is sorted before generation combinations
   for(let currentHand of allHands) {
-    currentHand = sortHand(currentHand);
-
-    // Problem with this:
-    // highestCard must be of the cards that contribute to the ranking...
-    // so if for example some has 10 10 4 4 and someone 6 6 4 4, the second person might win because their 5th card is higher than any of the firsts even though his pair was higher!
-    // and: highestCard should come from playerhands because every player has the same river cards..
     let currentHandInfo = {rank: getHighestRank(currentHand), cards: currentHand, highestCard: getHighestCard(currentHand)};
-    if(currentHandInfo.rank == highestHandInfo.rank && numberRanking[currentHandInfo.highestCard.number] < numberRanking[highestHandInfo.highestCard.number]) {
-      highestHandInfo = {...currentHandInfo}
-    } else if(currentHandInfo.rank < highestHandInfo.rank) {
-      highestHandInfo = {...currentHandInfo}
+    if(compareHandInfos(currentHandInfo, highestHandInfo)) {
+      highestHandInfo = {...currentHandInfo};
     }
   }
 
@@ -637,6 +661,54 @@ function generateCombinations(elementsLeft, currentArray, wantedArraySize, stora
 
   generateCombinations(newElementsLeft, newCurrentArrayLeft, wantedArraySize, storage)
   generateCombinations(newElementsLeft, newcurrentArrayRight, wantedArraySize, storage)
+}
+
+// returns true if a > b, false if a < b
+function compareHandInfos(handInfoA, handInfoB) {
+  if(handInfoA.rank < handInfoB.rank) {
+    return true;
+  }
+  if(handInfoA.rank == handInfoB.rank) {
+    return compareRank(handInfoA.rank, handInfoA.cards, handInfoB.cards);
+  }
+  return false;
+}
+
+// FIX: should also do something if both highestRanking cards are the same, then look at the second highest etc
+// returns true if a > b, false if a < b
+function compareRank(rank, handA, handB) {
+  switch(rank) {
+    case 1: 
+            return true // tie!
+    case 2:
+    case 4:
+    case 5:
+    case 6:
+    case 10:
+            return numberRanking[getHighestCard(handA).number] < numberRanking[getHighestCard(handB).number]
+    case 3:
+            return numberRanking[getHighestSetNumber(handA, 4)] < numberRanking[getHighestSetNumber(handB, 4)]
+    case 7:
+            return numberRanking[getHighestSetNumber(handA, 3)] < numberRanking[getHighestSetNumber(handB, 3)]
+    case 8:
+    case 9:
+            return numberRanking[getHighestSetNumber(handA, 2)] < numberRanking[getHighestSetNumber(handB, 2)]
+  }
+}
+
+function getHighestSetNumber(hand, number) {
+  let handNumbers = hand.map(card => card.number);
+  let numberGroup = getNumberGroup(handNumbers);
+
+  let highest = 0;
+  for(let num of Object.keys(numberGroup)) {
+    if(numberGroup[num] == number) {
+      if(numberRanking[num] < (numberRanking[highest] ?? 14)) {
+        highest = num
+      }
+    }
+  }
+  return highest;
 }
 
 function getHighestRank(hand) {
@@ -689,7 +761,7 @@ function isRoyalFlush(hand,  handNumbers, handTypes) {
       return false
     }
   }
-  return isFlush(hand. handNumbers, handTypes);
+  return isFlush(hand, handNumbers, handTypes);
 }
 
 // expects sorted hand based on rank small > big (A, K, Q .. )
@@ -715,7 +787,6 @@ function isFullHouse(hand, handNumbers, handTypes) {
 
 // hand.length > 0
 function isFlush(hand, handNumbers, handTypes) {
-
   // check if all the types are the same as the first one
   let type = handTypes[0];
   for(let i = 1; i < hand.length; i++) {
@@ -726,6 +797,7 @@ function isFlush(hand, handNumbers, handTypes) {
   return true;
 }
 
+// FIX: Should also consider ace as 1!
 // hand.length > 0
 // expects sorted hand based on rank small > big (A, K, Q .. )
 function isStraight(hand, handNumbers, handTypes) {
