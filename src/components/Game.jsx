@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
 import { useEffect } from 'react';
 import styled from 'styled-components';
+import { evaluateHand, compareHandInfos, getRankOfHandOfFive } from '../helpers/HandEval';
+import henk from '../bots/henk/henk.js';
+import henk_v2 from '../bots/henk_v2/henk_v2.js'
 
 import Table from './Table';
 
+// do
+const GameContainer = styled.div``;
+
 const Button = styled.button`
-  margin: 0 .25rem;
+  border: solid 0.1rem black;
+  margin: 0 0.25rem;
   width: 6rem;
   height: 3rem;
   background: #232323;
@@ -19,10 +26,57 @@ const Button = styled.button`
   }
 `;
 
-const StartButton = styled(Button)``
-const FoldButton = styled(Button)``
-const CallButton = styled(Button)``
-const RaiseButton = styled(Button)``
+const StartButton = styled(Button)``;
+const FoldButton = styled(Button)``;
+const CallButton = styled(Button)``;
+const RaiseButton = styled(Button)``;
+
+const RaiseSlideContainer = styled.div`
+  width: fit-content;
+  margin-left: 19.75rem;
+  outline: none;
+  margin-top: 0.25rem;
+`
+
+const RaiseInput = styled.input`
+  appearance: none;
+  background: rgb(225, 225, 225);
+  opacity: 0.7;
+  transition: opacity .2s;
+  border-radius: 1rem;
+  width: 8rem;
+  height: 0.75rem;
+
+  &:hover {
+    opacity: 0.95;
+  }
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(53, 101, 77, 1);
+    height: 1.25rem;
+    width: 1.25rem;
+    border-radius: 1rem;
+    cursor: w-resize;
+  }
+`
+
+const RaiseInputShower = styled.div`
+  width: 8rem;
+  color: white;
+  font-weight: 500;
+  font-size: 1.2rem;
+  user-select: none;
+`
+
+const WinnerShow = styled.div`
+  position: fixed;
+  left: 50%;
+  top: 45%;
+  transform: translate(-50%, -50%);
+  font-size: 8rem;
+`;
 
 // Card = {number: ..., type: ... backwards: ...};
 // playerCoins = {black: ..., darkblue: ..., darkgreen: ..., darkred: ...};
@@ -33,10 +87,10 @@ let cardTypes = ['club', 'heart', 'diamond', 'spade'];
 let cardNumbers = ['A', 2, 3, 4, 5, 6, 7, 8, 9, 10, 'J', 'Q', 'K'];
 
 let baseCoins = {
-  black: 1,
-  darkblue: 4,
-  darkgreen: 8,
-  darkred: 12,
+  black: 10,
+  darkblue: 10,
+  darkgreen: 10,
+  darkred: 10,
 };
 
 let coinValues = {
@@ -48,15 +102,24 @@ let coinValues = {
 
 let coinTypes = ['black', 'darkblue', 'darkgreen', 'darkred'];
 
-// playerStates = ['noturn', 'folded', 'waiting', 'mustRaise']
+// playerStates = ['noturn', 'folded', 'waiting', 'mustRaise', 'out']
+
+// all data
+// {playerID, handCard1, handCard2, rankWithRiver, playerBet, currentBet, playerState, currentCycle, move, won}
 
 /**
  * TODO:
- * Make nice UI for playerInfo
+ * open cards of playersLeft when determining winner (and take some time on open and show winner)
+ * Upgrade AI
+ *
+ * gets:
+ * updateData = f
+ * createNewGame = f
  * 
  * @returns Component that manages the Game
  */
-export default function Game() {
+
+export default function Game(props) {
   let [cardStack, setCardStack] = useState(shuffleCardStack(getFreshCardStack()));
   let [cardRiver, setCardRiver] = useState([]);
   let [coinStack, setCoinStack] = useState({ black: 0, darkblue: 0, darkgreen: 0, darkred: 0 });
@@ -77,41 +140,121 @@ export default function Game() {
   let [player4State, setPlayer4State] = useState('noturn');
 
   let playerIDs = {
-    0: { player: player1, setPlayer: setPlayer1 , playerBet: player1Bet, setPlayerBet: setPlayer1Bet, playerState: player1State, setPlayerState: setPlayer1State },
-    1: { player: player2, setPlayer: setPlayer2 , playerBet: player2Bet, setPlayerBet: setPlayer2Bet, playerState: player2State, setPlayerState: setPlayer2State },
-    2: { player: player3, setPlayer: setPlayer3 , playerBet: player3Bet, setPlayerBet: setPlayer3Bet, playerState: player3State, setPlayerState: setPlayer3State },
-    3: { player: player4, setPlayer: setPlayer4 , playerBet: player4Bet, setPlayerBet: setPlayer4Bet, playerState: player4State, setPlayerState: setPlayer4State },
+    0: {
+      player: player1,
+      setPlayer: setPlayer1,
+      playerBet: player1Bet,
+      setPlayerBet: setPlayer1Bet,
+      playerState: player1State,
+      setPlayerState: setPlayer1State,
+    },
+    1: {
+      player: player2,
+      setPlayer: setPlayer2,
+      playerBet: player2Bet,
+      setPlayerBet: setPlayer2Bet,
+      playerState: player2State,
+      setPlayerState: setPlayer2State,
+    },
+    2: {
+      player: player3,
+      setPlayer: setPlayer3,
+      playerBet: player3Bet,
+      setPlayerBet: setPlayer3Bet,
+      playerState: player3State,
+      setPlayerState: setPlayer3State,
+    },
+    3: {
+      player: player4,
+      setPlayer: setPlayer4,
+      playerBet: player4Bet,
+      setPlayerBet: setPlayer4Bet,
+      playerState: player4State,
+      setPlayerState: setPlayer4State,
+    },
   };
 
   let [smallBlind, setSmallBlind] = useState(2 % 4); // player1 = 0 player4 = 3...
   let [bigBlind, setBigBlind] = useState((smallBlind + 1) % 4);
   let [currentTurn, setCurrentTurn] = useState((bigBlind + 1) % 4);
 
-  let [minimalBet, setMinimalBet] = useState(coinValues['darkred']*2);
-  let [currentBet, setCurrentBet] = useState(0);
+  let [minimalBet, setMinimalBet] = useState(coinValues['darkred'] * 2);
+  let [currentBet, setCurrentBet] = useState(minimalBet);
 
-  let [currentCycle, setCurrentCycle] = useState(0); 
+  let [currentCycle, setCurrentCycle] = useState(0);
 
   let [startDisabled, setStartDisabled] = useState(false);
 
-  // Bots
+  let [gameOver, setGameOver] = useState(false);
+  let [winner, setWinner] = useState(0);
+
+  let [player1TurnMessage, setPlayer1TurnMessage] = useState('');
+  let [player2TurnMessage, setPlayer2TurnMessage] = useState('');
+  let [player3TurnMessage, setPlayer3TurnMessage] = useState('');
+  let [player4TurnMessage, setPlayer4TurnMessage] = useState('');
+
+  let turnMessageSetters = {
+    0: { setPlayerTurnMessage: setPlayer1TurnMessage },
+    1: { setPlayerTurnMessage: setPlayer2TurnMessage },
+    2: { setPlayerTurnMessage: setPlayer3TurnMessage },
+    3: { setPlayerTurnMessage: setPlayer4TurnMessage },
+  };
 
   // special variable to make sure useEffect listens correctly
-  let [botListener, setBotListener] = useState(true);
+  let [effectListener, setEffectListener] = useState(true);
+
+  // Winner listener
+
+  useEffect(() => {
+    let alivePlayers = getAlivePlayers();
+    if (alivePlayers.length == 1) {
+      let winner = alivePlayers[0];
+      setStartDisabled(true);
+      setGameOver(true);
+      setWinner(winner);
+      props.updateData(allData);
+      props.createNewGame();
+    }
+  }, [currentCycle, effectListener]);
+
+  // Bots
+
+  // Temp for data generation
+  // useEffect(() => {
+  //   if (!startDisabled) {
+  //     startNewRound();
+  //     setStartDisabled(true);
+  //   }
+  // }, [startDisabled]);
 
   // Automatic turns when turn is not for the player
   useEffect(() => {
-    if(currentTurn % 4 != 0 & startDisabled) {
-      setTimeout(() => generateRandomTurnAction(), 1000)
+    if (gameOver) {
+      return;
     }
-  }, [currentTurn, startDisabled, botListener])
+    // (currentTurn % 4 != 0)
+    // time should be 2000
+    if ((currentTurn % 4 != 0) && startDisabled) {
+      setTimeout(() => generateTurnAction(), 2000);
+    }
+  }, [currentTurn, startDisabled, gameOver, effectListener]);
+
+  // For data
+  let [currentRoundData, setCurrentRoundData] = useState([]);
+  let [allData, setAllData] = useState([]);
+
+  // For raising
+  let [minRaise, setMinRaise] = useState(getRaise(0))
+  let [currentRaiseInput, setCurrentRaiseInput] = useState(minRaise);
 
   return (
-    <>
+    <GameContainer>
+      {gameOver ? <WinnerShow> {winner == 0 ? 'You won!' : `Player ${winner + 1} won`} </WinnerShow> : ''}
       <Table
         cardStack={cardStack}
         cardRiver={cardRiver}
         coinStack={coinStack}
+        coinStackValue={getTotalChips({ playerCoins: coinStack })}
         players={[player1, player2, player3, player4]}
         coinValues={[
           { bet: player1Bet, total: getTotalChips(player1) },
@@ -119,9 +262,12 @@ export default function Game() {
           { bet: player3Bet, total: getTotalChips(player3) },
           { bet: player4Bet, total: getTotalChips(player4) },
         ]}
+        playerStates={[player1State, player2State, player3State, player4State]}
         smallBlind={smallBlind}
         bigBlind={bigBlind}
         turn={currentTurn}
+        turnMessages={[player1TurnMessage, player2TurnMessage, player3TurnMessage, player4TurnMessage]}
+        playerNames={['Me', 'Henk_v2 1', 'Henk_v2 2', 'Henk_v2 3']}
       />
       <StartButton
         disabled={startDisabled}
@@ -132,26 +278,48 @@ export default function Game() {
       >
         Start
       </StartButton>
-      <FoldButton 
-        disabled={currentTurn != 0 || !startDisabled}
+      <FoldButton
+        disabled={currentTurn != 0 || !startDisabled || gameOver}
         onClick={() => handleTurn(currentTurn, 'fold')}
       >
         Fold
       </FoldButton>
-      <CallButton 
-        disabled={currentTurn != 0 || !startDisabled}
+      <CallButton
+        disabled={currentTurn != 0 || !startDisabled || gameOver}
         onClick={() => handleTurn(currentTurn, 'call')}
       >
-        Call
+        {isCheckOrBet(0) ? 'Check' : 'Call'}
       </CallButton>
-      <RaiseButton 
-        disabled={currentTurn != 0 || !startDisabled}
-        onClick={() => handleTurn(currentTurn, 'raise', currentBet ? currentBet * 2 : minimalBet)}
+      <RaiseButton
+        disabled={currentTurn != 0 || !startDisabled || gameOver || isRaiseDisabled()}
+        onClick={() => handleTurn(currentTurn, 'raise', Math.round(currentRaiseInput))}
       >
-        Raise
+        {isCheckOrBet(0) ? 'Bet' : 'Raise'}
       </RaiseButton>
-    </>
+      <RaiseSlideContainer>
+        <RaiseInput type='range' step={(coinValues['darkred'] / getTotalChips(player1)) * 100} min={(minRaise / getTotalChips(player1)) * 100} max={100.1} value={(currentRaiseInput / getTotalChips(player1)) * 100} onInput={(event) => setCurrentRaiseInput((event.target.value / 100) * getTotalChips(player1))}/>
+        <RaiseInputShower>{Math.min(Math.max(0, Math.round(currentRaiseInput)) + (currentBet - player1Bet), getTotalChips(player1))}</RaiseInputShower>
+      </RaiseSlideContainer>
+    </GameContainer>
   );
+  
+  function isCheckOrBet(id) {
+    let {playerBet} = playerIDs[id]
+    return currentTurn == id && playerBet == currentBet
+  }
+
+  function getRaise(id, newCurrentBet) {
+    let { player, playerBet } = playerIDs[id ?? currentTurn];
+    let raise = Math.min(getTotalChips(player) + playerBet - (newCurrentBet ?? currentBet),  (newCurrentBet ?? currentBet) ?  (newCurrentBet ?? currentBet) : minimalBet);
+    return raise;
+  }
+
+  function isRaiseDisabled() {
+    // playerBet + totalChips <= currentBet
+    let { player, playerBet } = playerIDs[currentTurn];
+    let totalChips = getTotalChips(player);
+    return totalChips <= currentBet - playerBet || totalChips == 0;
+  }
 
   function startNewRound() {
     let currentCardStack = [...cardStack];
@@ -165,18 +333,25 @@ export default function Game() {
     setCardStack(currentCardStack);
     setCardRiver(currentCardRiver);
     setCoinStack(currentCoinStack);
+
+    // handle data
+    setCurrentRoundData([]);
   }
 
   function drawPlayerCards(currentCardStack, currentCoinStack) {
     function drawPlayer({ id }) {
-      let {player, setPlayer} = playerIDs[id];
+      let { player, setPlayer, playerState } = playerIDs[id];
+
+      if (playerState == 'out') {
+        return;
+      }
 
       let currentPlayer = { ...player };
       let { playerCoins, playerHand } = currentPlayer;
 
       let [card1, card2] = [currentCardStack.pop(), currentCardStack.pop()];
 
-      if(id == 0) {
+      if (id == 0) {
         card1.backwards = false;
         card2.backwards = false;
       }
@@ -194,13 +369,16 @@ export default function Game() {
       setPlayer({ playerCoins, playerHand });
     }
 
-    for(let i = 0; i < 4; i++) {
-      drawPlayer({id: i})
+    for (let i = 0; i < 4; i++) {
+      drawPlayer({ id: i });
     }
   }
 
   function drawRiverCards(amount, currentCardRiver, currentCardStack) {
     for (let i = 0; i < amount; i++) {
+      if(currentCardRiver.length == 5) {
+        return;
+      }
       currentCardRiver.push(currentCardStack.pop());
     }
   }
@@ -208,7 +386,7 @@ export default function Game() {
   function flipRiverCards(currentCardRiver, backwards, amount) {
     let i = 0;
     for (let card of currentCardRiver) {
-      if(i < amount) {
+      if (i < amount) {
         card.backwards = backwards;
       }
       i++;
@@ -219,36 +397,34 @@ export default function Game() {
     currentCardStack.pop();
   }
 
-  // FIX!
+  // should distribute coins better
   // take amount from playerCoins and give it to currentCoinStack
   function getChips(currentCoinStack, playerCoins, amount, id) {
-
-    let totalRedCoinsPlayer = 0
-    let redValue = coinValues['darkred']
+    let totalRedCoinsPlayer = 0;
+    let redValue = coinValues['darkred'];
 
     // calculate totalCoinValue in reds
     // and take all players coins
 
-    for(let coinType of coinTypes) {
-      let coinValue = coinValues[coinType]
-      totalRedCoinsPlayer += playerCoins[coinType] * (coinValue / redValue)
+    for (let coinType of coinTypes) {
+      let coinValue = coinValues[coinType];
+      totalRedCoinsPlayer += playerCoins[coinType] * (coinValue / redValue);
       playerCoins[coinType] = 0;
     }
 
+    let redCoinsTaken = 0;
+    let redCoinsToGiveStack = amount / redValue;
 
-    let redCoinsTaken = 0
-    let redCoinsToGiveStack = amount / redValue
-    
     // give correct coins to stack
 
-    while(redCoinsToGiveStack > 0 && totalRedCoinsPlayer - redCoinsTaken >= redCoinsToGiveStack) {
-      let amountToGiveLeft = redValue * redCoinsToGiveStack
-      for(let coinType of coinTypes) {
+    while (redCoinsToGiveStack > 0 && totalRedCoinsPlayer - redCoinsTaken > 0) {
+      let amountToGiveLeft = redValue * redCoinsToGiveStack;
+      for (let coinType of coinTypes) {
         let coinValue = coinValues[coinType];
-        if(coinValue <= amountToGiveLeft) {
-          currentCoinStack[coinType] += 1
-          redCoinsToGiveStack -= coinValue / redValue
-          redCoinsTaken += coinValue / redValue
+        if (coinValue <= amountToGiveLeft) {
+          currentCoinStack[coinType] += 1;
+          redCoinsToGiveStack -= coinValue / redValue;
+          redCoinsTaken += coinValue / redValue;
           break;
         }
       }
@@ -256,24 +432,23 @@ export default function Game() {
 
     // give back correct coins to player
 
-    totalRedCoinsPlayer -= redCoinsTaken
+    totalRedCoinsPlayer -= redCoinsTaken;
 
-    while(totalRedCoinsPlayer > 0) {
-      let amountToGiveLeft = redValue * totalRedCoinsPlayer
-      for(let coinType of coinTypes) {
+    while (totalRedCoinsPlayer > 0) {
+      let amountToGiveLeft = redValue * totalRedCoinsPlayer;
+      for (let coinType of coinTypes) {
         let coinValue = coinValues[coinType];
-        if(coinValue <= amountToGiveLeft) {
-          playerCoins[coinType] += 1
-          totalRedCoinsPlayer -= coinValue / redValue
+        if (coinValue <= amountToGiveLeft) {
+          playerCoins[coinType] += 1;
+          totalRedCoinsPlayer -= coinValue / redValue;
           break;
         }
       }
     }
 
     // update id's current bet.
-    let {playerBet, setPlayerBet} = playerIDs[id];
-    setPlayerBet(playerBet + redCoinsTaken*redValue);
-    
+    let { playerBet, setPlayerBet } = playerIDs[id];
+    setPlayerBet(playerBet + redCoinsTaken * redValue);
   }
 
   function getTotalChips({ playerCoins }) {
@@ -285,26 +460,59 @@ export default function Game() {
     return total;
   }
 
-  function handleTurn(id, move, amount) {
-    let currentCoinStack = {...coinStack};
-    let {player, setPlayer, playerBet, playerState, setPlayerState} = playerIDs[id];
+  // mogelijke extra attributes:
+  // rank verbeteraars zoals almost flush etc
+  function generateTurnData(id, move) {
+    // {playerID, handCard1, handCard2, rankWithRiver, playerBet, currentBet, playerState, currentCycle, move, won}
+    let { player, playerState } = playerIDs[id];
+    let { playerHand } = player;
 
-    let otherPlayerStates = []
-    for(let i = 0; i < 4; i++) {
-      if(i == id) {
+    let rankWithRiver = 10;
+
+    if (cardRiver.length == 3) {
+      rankWithRiver = getRankOfHandOfFive([...playerHand, ...cardRiver]);
+    }
+
+    if (cardRiver.length == 4 || cardRiver.length == 5) {
+      rankWithRiver = evaluateHand([...playerHand, ...cardRiver]).rank;
+    }
+
+    let roundData = [...currentRoundData];
+    roundData.push({
+      playerID: id,
+      handCard1: playerHand[0],
+      handCard2: playerHand[1],
+      rankWithRiver,
+      playerState,
+      currentCycle,
+      move,
+    });
+
+    setCurrentRoundData(roundData);
+  }
+
+  function handleTurn(id, move, amount) {
+    generateTurnData(id, move);
+
+    let currentCoinStack = { ...coinStack };
+    let { player, setPlayer, playerBet, playerState, setPlayerState } = playerIDs[id];
+
+    let otherPlayerStates = [];
+    for (let i = 0; i < 4; i++) {
+      if (i == id) {
         continue;
       }
 
-      let {playerState: otherPlayerState, setPlayerState: setOtherPlayerState} = playerIDs[i];
-      otherPlayerStates.push({id: i, playerState: otherPlayerState,  setPlayerState: setOtherPlayerState})
+      let { playerState: otherPlayerState, setPlayerState: setOtherPlayerState } = playerIDs[i];
+      otherPlayerStates.push({ id: i, playerState: otherPlayerState, setPlayerState: setOtherPlayerState });
     }
 
-    let currentPlayer = {...player};
-    let currentPlayerBet = {playerBet}; // make object of them so that it copies by reference
-    let currentPlayerState = {playerState}; 
-    let {playerCoins, playerHand} = currentPlayer;
+    let currentPlayer = { ...player };
+    let currentPlayerBet = { playerBet }; // make object of them so that it copies by reference
+    let currentPlayerState = { playerState };
+    let { playerCoins, playerHand } = currentPlayer;
 
-    switch(move) {
+    switch (move) {
       case 'fold':
         handleFold(currentPlayerState);
         break;
@@ -312,79 +520,110 @@ export default function Game() {
         handleCall(id, currentCoinStack, currentPlayerState, playerCoins, currentPlayerBet);
         break;
       case 'raise':
-        handleRaise(id, currentCoinStack, currentPlayerState, playerCoins, currentPlayerBet, otherPlayerStates, amount);
+        amount = handleRaise(id, currentCoinStack, currentPlayerState, playerCoins, currentPlayerBet, otherPlayerStates, amount);
         break;
     }
 
-    setCoinStack(currentCoinStack)
-    setPlayer({playerCoins, playerHand});
-    setPlayerState(currentPlayerState.playerState)
+    setCoinStack(currentCoinStack);
+    setPlayer({ playerCoins, playerHand });
+    setPlayerState(currentPlayerState.playerState);
 
-    for(let {playerState: otherPlayerState,  setPlayerState: setOtherPlayerState} of otherPlayerStates) {
+    for (let { playerState: otherPlayerState, setPlayerState: setOtherPlayerState } of otherPlayerStates) {
       setOtherPlayerState(otherPlayerState);
     }
 
-    handleTurnFinish(id, [...otherPlayerStates, {id, playerState: currentPlayerState.playerState, setPlayerState}]);
+    handleTurnFinish(
+      id,
+      [...otherPlayerStates, { id, playerState: currentPlayerState.playerState, setPlayerState }],
+      currentCoinStack
+    );
+    // handle turn message:
+    setTurnMessage(id, move, amount);
   }
 
   function handleFold(currentPlayerState) {
-    currentPlayerState.playerState = "folded";
+    currentPlayerState.playerState = 'folded';
   }
 
   function handleCall(id, currentCoinStack, currentPlayerState, playerCoins, currentPlayerBet) {
     let left = currentBet - currentPlayerBet.playerBet;
+    let total = getTotalChips({ playerCoins });
+    left = Math.min(left, total);
     getChips(currentCoinStack, playerCoins, left, id);
-    currentPlayerState.playerState = "waiting";
+    currentPlayerState.playerState = 'waiting';
   }
 
-  function handleRaise(id, currentCoinStack, currentPlayerState, playerCoins, currentPlayerBet, otherPlayerStates, amount) {
+  // Player shouldn't be able to raise if he/she can't afford to pay the currentBet
+  function handleRaise(
+    id,
+    currentCoinStack,
+    currentPlayerState,
+    playerCoins,
+    currentPlayerBet,
+    otherPlayerStates,
+    amount
+  ) {
+    // raises currentBet to currentBet + amount
+    // get how much money the player currently has
+    let playerTotal = getTotalChips({ playerCoins });
+    // calculate how much money the player must pay to get to the currentBet
+    let leftToPayBeforeRaise = currentBet - currentPlayerBet.playerBet;
 
+    let playerTotalAfterCall = playerTotal - leftToPayBeforeRaise;
+
+    amount = Math.min(amount, playerTotalAfterCall);
+
+    // Calculate new bet
     let newBet = currentBet + amount;
+    // Calculate the money left to pay
     let left = newBet - currentPlayerBet.playerBet;
 
     getChips(currentCoinStack, playerCoins, left, id);
-    setCurrentBet(newBet);
 
-    for(let otherPlayerState of otherPlayerStates) {
-      if(otherPlayerState.playerState != "folded") {
-        otherPlayerState.playerState = "mustRaise"
+    setCurrentBet(newBet);
+    setMinRaise(getRaise(0, newBet));
+    setCurrentRaiseInput(getRaise(0, newBet))
+
+    for (let otherPlayerState of otherPlayerStates) {
+      if (otherPlayerState.playerState != 'folded' && otherPlayerState.playerState != 'out') {
+        otherPlayerState.playerState = 'mustRaise';
       }
     }
 
-    currentPlayerState.playerState = "waiting";
+    currentPlayerState.playerState = 'waiting';
+    return amount;
   }
 
-
-  function handleTurnFinish(id, playerStates) {
+  function handleTurnFinish(id, playerStates, currentCoinStack) {
     let playersLeft = getNotFoldedPlayerIDs(playerStates);
 
     // Check if round is over and handle it
     let roundDone = playersLeft.length == 1;
 
-    if(roundDone) {
-      endRound(playersLeft[0])
+    if (roundDone) {
+      endRound(playersLeft[0], currentCoinStack);
       return;
     }
-    
+
     // Check if were done with this cycle and handle it
     let cycleDone = true;
-    for(let {playerState} of playerStates) {
-      if(playerState == "mustRaise" || playerState == "noturn") {
+    for (let { playerState } of playerStates) {
+      if (playerState == 'mustRaise' || playerState == 'noturn') {
         cycleDone = false;
       }
     }
 
-    if(cycleDone) {
-      handleCycleFinish(currentCycle, playersLeft);
-      return; 
+    if (cycleDone) {
+      handleCycleFinish(currentCycle, playersLeft, currentCoinStack, playerStates);
+      return;
     }
 
     // get closest next player and set turn to that player
-    for(let i = 1; i < 4; i++) {
-      let currentId = (id + i) % 4
-      if(playersLeft.includes(currentId)) {
+    for (let i = 1; i < 4; i++) {
+      let currentId = (id + i) % 4;
+      if (playersLeft.includes(currentId)) {
         setCurrentTurn(currentId);
-        setBotListener(!botListener) // temp
+        setEffectListener(!effectListener);
         break;
       }
     }
@@ -392,28 +631,43 @@ export default function Game() {
 
   function getNotFoldedPlayerIDs(playerStates) {
     let playersLeft = [];
-    for(let i = 0; i < 4; i++) {
-      let {id, playerState} = playerStates[i]
-      if(playerState != "folded") {
-        playersLeft.push(id)
+    for (let i = 0; i < 4; i++) {
+      let { id, playerState } = playerStates[i];
+      if (playerState != 'folded' && playerState != 'out') {
+        playersLeft.push(id);
       }
     }
     return playersLeft;
   }
 
-  function handleCycleFinish(oldCycle, playersLeft) {
+  // if someone is all-in, go to the last round instantly
+  function handleCycleFinish(oldCycle, playersLeft, currentCoinStack, playerStates) {
     // cycleOrder = ['beginning', 'round1', 'round2', 'round3', 'finished']
     // beginning: 3 mid cards closed, round1 open mid 3 cards, round2 add open 4th card, round3 add open 5th card, finished everyone left shows hand and winner determined
 
-    let currentCardRiver = [...cardRiver]
-    let currentCardStack = [...cardStack]
+    let currentCardRiver = [...cardRiver];
+    let currentCardStack = [...cardStack];
 
-    for(let id of playersLeft) {
-      let {setPlayerState} = playerIDs[id];
-      setPlayerState('noturn')
+    for (let id of playersLeft) {
+      let { setPlayerState } = playerIDs[id];
+      setPlayerState('noturn');
     }
 
-    switch(oldCycle) {
+    // check if allIn cycle
+    let allInPlayer = false
+    for(let {id, playerState} of playerStates) {
+      let {player: {playerCoins}} = playerIDs[id]
+      if(getTotalChips({playerCoins}) == 0 && playerState != "out" && playerState != "folded") {
+        allInPlayer = true
+      }
+    }
+
+    if(allInPlayer && oldCycle != 3) {
+      handleAllInCycle(currentCardRiver, currentCardStack, currentCoinStack, playersLeft);
+      return;
+    }
+
+    switch (oldCycle) {
       case 0:
         // open 3 mid cards, then start new cycle
         flipRiverCards(currentCardRiver, false, 3);
@@ -438,18 +692,18 @@ export default function Game() {
         break;
       case 3:
         // Game is finished, determine winner end round
-        endRound(determineWinner(playersLeft, currentCardRiver))
+        let winner = determineWinner(playersLeft, currentCardRiver);
+        endRound(winner, currentCoinStack);
     }
   }
 
-
   function startNewCycle(oldCycle, playersLeft) {
     // give turn to correct player:
-    for(let i = smallBlind; i < smallBlind + 4; i++) {
-      let currentId = (i) % 4
-      if(playersLeft.includes(currentId)) {
+    for (let i = smallBlind; i < smallBlind + 4; i++) {
+      let currentId = i % 4;
+      if (playersLeft.includes(currentId)) {
         setCurrentTurn(currentId);
-        setBotListener(!botListener) // temp
+        setEffectListener(!effectListener);
         break;
       }
     }
@@ -457,60 +711,81 @@ export default function Game() {
     setCurrentCycle(oldCycle + 1);
   }
 
+  function handleAllInCycle(currentCardRiver, currentCardStack, currentCoinStack, playersLeft) {
+    drawRiverCards(5 - currentCardRiver.length, currentCardRiver, currentCardStack)
+    flipRiverCards(currentCardRiver, false, 5);
+    let winner = determineWinner(playersLeft, currentCardRiver);
+    endRound(winner, currentCoinStack);
+  }
+
   // playersLeft must be > 0
   function determineWinner(playersLeft, currentCardRiver) {
     let playerRankings = [];
 
-    for(let player of playersLeft) {
-      let {player: {playerHand}} = playerIDs[player];
+    for (let player of playersLeft) {
+      let {
+        player: { playerHand },
+      } = playerIDs[player];
       let highestHand = getHighestHand(playerHand, currentCardRiver);
-      playerRankings.push({id: player, highestHand});
+      // console.log({highestHand})
+      playerRankings.push({ id: player, highestHand });
     }
 
     // Comparison should be different: look evaluateHand()
 
-    let winner = playerRankings[0]
-    for(let player of playerRankings) {
-      if(compareHandInfos(player.highestHand, winner.highestHand)) {
-        winner = {...player}
-      } 
+    let winner = playerRankings[0];
+    for (let player of playerRankings) {
+      if (compareHandInfos(player.highestHand, winner.highestHand)) {
+        winner = { ...player };
+      }
     }
 
-    return winner.id
+    // console.log({winner})
+
+    return winner.id;
   }
 
   function getHighestHand(playerHand, currentCardRiver) {
     let fullHand = [...playerHand, ...currentCardRiver];
+    // console.log({fullHand})
     return evaluateHand(fullHand);
   }
 
   // not certain whether the state variables will be correct here...
-  function endRound(winnerId) {
+  function endRound(winnerId, currentCoinStack) {
+    // handle roundData
+    currentRoundData.forEach(data => {
+      data.won = data.playerID == winnerId;
+    });
+
+    let currentAllData = [...allData];
+    currentAllData.push(...currentRoundData);
+    setAllData(currentAllData);
+
     // clean up everything and prepare for next round
 
-    let currentCoinStack = {...coinStack};
     let currentCardRiver = [...cardRiver];
     let currentCardStack = [...cardStack];
 
-    let players = []
+    let players = [];
 
-    for(let i = 0; i < 4; i++) {
-      let {player, setPlayer , playerBet, setPlayerBet, playerState, setPlayerState} = playerIDs[i];
-      players.push({player, setPlayer , playerBet, setPlayerBet, playerState, setPlayerState});
+    for (let i = 0; i < 4; i++) {
+      let { player, setPlayer, playerBet, setPlayerBet, playerState, setPlayerState } = playerIDs[i];
+      players.push({ player, setPlayer, playerBet, setPlayerBet, playerState, setPlayerState });
     }
 
     // give winner the coinStack and remove his cards, clear the coinStack
-    let {player, setPlayer} = players[winnerId];
-    let {playerCoins, playerHand} = player;
+    let { player, setPlayer } = players[winnerId];
+    let { playerCoins, playerHand } = player;
 
-    for(let coinType of coinTypes) {
+    for (let coinType of coinTypes) {
       playerCoins[coinType] += currentCoinStack[coinType];
       currentCoinStack[coinType] = 0;
     }
 
     playerHand = [];
 
-    setPlayer({playerCoins, playerHand});
+    setPlayer({ playerCoins, playerHand });
 
     // clear cardRiver and remake the cardStack
 
@@ -522,34 +797,67 @@ export default function Game() {
 
     // for all the players expect winner, keep their coinStack but remove the cards
 
-    for(let i = 0; i < 4; i++) {
-
+    for (let i = 0; i < 4; i++) {
       // clear bets and state
-      let {setPlayerBet, setPlayerState} = players[i];
+      let { player, setPlayer, playerBet, setPlayerBet, playerState, setPlayerState } = players[i];
+      let { playerCoins } = player;
 
       setPlayerBet(0);
-      setPlayerState('noturn');
 
-      // not winner
-      if(i == winnerId) {
+      // Calculate if player is dead
+      if (getTotalChips({ playerCoins }) == 0 || playerState == 'out') {
+        setPlayerState('out');
+        players[i] = { player, setPlayer, playerBet: 0, setPlayerBet, playerState: 'out', setPlayerState };
+        setPlayer({ playerCoins, playerHand: [] });
         continue;
       }
 
-      let {player, setPlayer} = players[i];
-      let {playerCoins} = player;
+      setPlayerState('noturn');
+      players[i] = { player, setPlayer, playerBet, setPlayerBet, playerState: 'noturn', setPlayerState };
 
-      setPlayer({playerCoins, playerHand: []})
+      // not winner
+      if (i == winnerId) {
+        continue;
+      }
+
+      setPlayer({ playerCoins, playerHand: [] });
+    }
+
+    let newSmallBlind = (smallBlind + 1) % 4;
+    let playerState = players[newSmallBlind].playerState;
+
+    while (playerState == 'out') {
+      newSmallBlind = (newSmallBlind + 1) % 4;
+      playerState = players[newSmallBlind].playerState;
+    }
+
+    let newBigBlind = (newSmallBlind + 1) % 4;
+    playerState = players[newBigBlind].playerState;
+
+    while (playerState == 'out') {
+      newBigBlind = (newBigBlind + 1) % 4;
+      playerState = players[newBigBlind].playerState;
+    }
+
+    let newCurrentTurn = (newBigBlind + 1) % 4;
+    playerState = players[newCurrentTurn].playerState;
+
+    while (playerState == 'out') {
+      newCurrentTurn = (newCurrentTurn + 1) % 4;
+      playerState = players[newCurrentTurn].playerState;
     }
 
     // update smallBlind, bigBlind and currentTurn respectively
-    setSmallBlind((smallBlind + 1) % 4);
-    setBigBlind((bigBlind + 1) % 4);
-    setCurrentTurn((bigBlind + 2) % 4)
-    setBotListener(!botListener) // temp
+    setSmallBlind(newSmallBlind);
+    setBigBlind(newBigBlind);
+    setCurrentTurn(newCurrentTurn);
+    setEffectListener(!effectListener);
 
     // clear the minimalBet and currentBet
-    setMinimalBet(coinValues['darkred']*2);
-    setCurrentBet(0);
+    setMinimalBet(coinValues['darkred'] * 2);
+    setCurrentBet(coinValues['darkred'] * 2);
+    setMinRaise(getRaise(0, coinValues['darkred'] * 2));
+    setCurrentRaiseInput(getRaise(0, coinValues['darkred'] * 2))
 
     // clear currentCycle
     setCurrentCycle(0);
@@ -558,26 +866,143 @@ export default function Game() {
     setStartDisabled(false);
   }
 
-  function generateRandomTurnAction() {
-    let max = 3;
-    let min = 1;
+  function getAlivePlayers() {
+    let alivePlayers = [];
+    for (let i = 0; i < 4; i++) {
+      let { playerState } = playerIDs[i];
+      if (playerState != 'out') {
+        alivePlayers.push(i);
+      }
+    }
+    return alivePlayers;
+  }
 
-    let random = Math.floor(Math.random() * (max - min + 1) + min)
+  // todo: generate bluffing, and some random folds since bots still go all in
+  // and if enemy raises, sometimes bluff or check what my win percentage is and look based on that to have a more human like bot
+  // and if call does not cost any money, never fold.
+  // and if raiseOutput is insanely high make sure to always raise if possible
+  function generateTurnAction() {
+    // henk takes:
+    // number1
+    // type1
+    // number2
+    // rankWithRiver
+    // playerState
+    // currentCycle
+    // move
 
-    switch(random) {
-      case 1:
-        handleTurn(currentTurn, 'fold');
-        console.log(`${currentTurn} folded`)
-        break;
-      case 2:
+    let { player, playerState, playerBet } = playerIDs[currentTurn];
+    let { playerCoins, playerHand } = player;
+    let [{ number: number1, type: type1 }, { number: number2, type: type2 }] = playerHand;
+
+    let rankWithRiver = 10;
+
+    if (cardRiver.length == 3) {
+      rankWithRiver = getRankOfHandOfFive([...playerHand, ...cardRiver]);
+    }
+
+    if (cardRiver.length == 4 || cardRiver.length == 5) {
+      rankWithRiver = evaluateHand([...playerHand, ...cardRiver]).rank;
+    }
+
+    let inputCall = { number1, type1, number2, type2, rankWithRiver, playerState, currentCycle, move: 'call' };
+    let inputRaise = { number1, type1, number2, type2, rankWithRiver, playerState, currentCycle, move: 'raise' };
+
+    let outputCall;
+    let outputRaise;
+
+    if(currentTurn != 0) {
+      // use henk_v2
+      outputCall = henk_v2(inputCall).won;
+      outputRaise = henk_v2(inputRaise).won;
+    } 
+    // use normal henk
+    // outputCall = henk(inputCall).won;
+    // outputRaise = henk(inputRaise).won;
+
+    // calculate amount i have to pay with raise/call
+    let toCallPercentage = (currentBet - playerBet) / getTotalChips({playerCoins});
+    let toRaisePercentage = ((currentBet * 2) - playerBet) / getTotalChips({playerCoins})
+
+    let isWorthItCall = 1 - toCallPercentage
+    let isWorthItRaise = 1 - toRaisePercentage
+
+    let isNotWorthItCall = false
+    let isNotWorthItRaise = false
+
+    if(isWorthItCall < 0.5 && outputCall < 0.8) {
+      // i want to be pretty certain i win if i spent more than halve my money..
+      isNotWorthItCall = true
+    } 
+
+    if(isWorthItRaise < 0.5 && outputRaise < 0.8) {
+      // i want to be pretty certain i win if i spent more than halve my money..
+      isNotWorthItRaise = true
+    }
+
+    if (outputCall > 0.6 || outputRaise > 0.6) {
+      // theres a higher chance that i am winning than losing
+
+      // call for sure
+      if(outputCall > 0.95) {
         handleTurn(currentTurn, 'call');
-        console.log(`${currentTurn} called`)
+      }
+      // raise for sure
+      if(outputRaise > 0.95 && !isRaiseDisabled()) {
+        handleTurn(currentTurn, 'raise', getRaise());
+      }
+      // raise with if good call
+      if ((outputRaise > outputCall && outputRaise > 0.7) && !isRaiseDisabled() && !isNotWorthItRaise) {
+        handleTurn(currentTurn, 'raise', getRaise());
+        return;
+      } 
+      // now im pretty sure raising is not the best option so its probably better to call
+      // but only if i dont spend to much money with a bad win chance
+      if(!isNotWorthItCall && (currentBet == playerBet || playerState != "mustRaise" || getTotalChips({playerCoins}) == 0 || outputCall > 0.6)) {
+        handleTurn(currentTurn, 'call');
+        return;
+      }
+      // else i just fold
+      handleTurn(currentTurn, 'fold');
+      return;
+    } else {
+      // i usually don't win in this spot
+      // but i like bluffers so i sometimes (1/10) bluff it for the memes
+      // note that for this to work, the data should consider blufffer previous turns
+      // ** bluff code **
+
+      // check to see if the call is a check (no money lost)
+      if(!isNotWorthItCall && (currentBet == playerBet || playerState != "mustRaise" || getTotalChips({playerCoins}) == 0 || outputCall > 0.6)) {
+        // in that case i always call, since it pointless to fold on a check
+        handleTurn(currentTurn, 'call');
+        return;
+      }
+
+      // now i'm pretty sure i should fold
+      handleTurn(currentTurn, 'fold');
+      return;
+    }
+  }
+
+  function setTurnMessage(id, turn, amount) {
+    let { setPlayerTurnMessage } = turnMessageSetters[id];
+    switch (turn) {
+      case 'fold':
+        setPlayerTurnMessage('Folded');
         break;
-      case 3:
-        handleTurn(currentTurn, 'raise', currentBet ? currentBet * 2 : minimalBet);
-        console.log(`${currentTurn} raised`)
+      case 'call':
+        setPlayerTurnMessage(isCheckOrBet(id) ? 'Checked' : 'Called');
+        break;
+      case 'raise':
+        setPlayerTurnMessage(isCheckOrBet(id) ? `Bet ${amount}` : `Raised ${amount}`);
         break;
     }
+    setTimeout(() => clearTurnMessage(id), 1500);
+  }
+
+  function clearTurnMessage(id) {
+    let { setPlayerTurnMessage } = turnMessageSetters[id];
+    setPlayerTurnMessage('');
   }
 }
 
@@ -615,247 +1040,3 @@ function shuffleCardStack(cardStack) {
 
   return cardStack;
 }
-
-// Methods for hand evaluation
-
-// lower = better rank
-let numberRanking = {
-  'A': 1,
-  'K': 2,
-  'Q': 3,
-  'J': 4,
-  10: 5,
-  9: 6,
-  8: 7,
-  7: 8,
-  6: 9,
-  5: 10,
-  4: 11,
-  3: 12,
-  2: 13,
-}
-
-function evaluateHand(hand) {
-
-  // make sets of 5 out the 7 element in hand (combinations (21 of them))
-  // for each check from isRoyalFlush to isPair, then get the hand with highest ranking, return that ranking
-
-  let allHands = [];
-  generateCombinations(sortHand(hand), [], 5, allHands);
-  let highestHandInfo = {rank: getHighestRank(allHands[0]), cards: allHands[0], highestCard: getHighestCard(allHands[0])}
-
-  // currentHand should be sorted automatically since the main hand is sorted before generation combinations
-  for(let currentHand of allHands) {
-    let currentHandInfo = {rank: getHighestRank(currentHand), cards: currentHand, highestCard: getHighestCard(currentHand)};
-    if(compareHandInfos(currentHandInfo, highestHandInfo)) {
-      highestHandInfo = {...currentHandInfo};
-    }
-  }
-
-  return highestHandInfo;
-}
-
-function generateCombinations(elementsLeft, currentArray, wantedArraySize, storage) {
-  if(currentArray.length == wantedArraySize) {
-    storage.push(currentArray)
-    return;
-  }
-  if(elementsLeft.length == 0) {
-    return;
-  }
-
-  let newElementsLeft = [...elementsLeft]
-  let element = newElementsLeft.shift();
-
-  let newCurrentArrayLeft = [...currentArray, element]
-  let newCurrentArrayRight = [...currentArray]
-
-  generateCombinations(newElementsLeft, newCurrentArrayLeft, wantedArraySize, storage)
-  generateCombinations(newElementsLeft, newCurrentArrayRight, wantedArraySize, storage)
-}
-
-// returns true if a > b, false if a < b
-function compareHandInfos(handInfoA, handInfoB) {
-  if(handInfoA.rank < handInfoB.rank) {
-    return true;
-  }
-  if(handInfoA.rank == handInfoB.rank) {
-    return compareRank(handInfoA.rank, handInfoA.cards, handInfoB.cards);
-  }
-  return false;
-}
-
-// FIX: should also do something if both highestRanking cards are the same, then look at the second highest etc
-// returns true if a > b, false if a < b
-function compareRank(rank, handA, handB) {
-  switch(rank) {
-    case 1: 
-            return true // tie!
-    case 2:
-    case 4:
-    case 5:
-    case 6:
-    case 10:
-            return numberRanking[getHighestCard(handA).number] < numberRanking[getHighestCard(handB).number]
-    case 3:
-            return numberRanking[getHighestSetNumber(handA, 4)] < numberRanking[getHighestSetNumber(handB, 4)]
-    case 7:
-            return numberRanking[getHighestSetNumber(handA, 3)] < numberRanking[getHighestSetNumber(handB, 3)]
-    case 8:
-    case 9:
-            return numberRanking[getHighestSetNumber(handA, 2)] < numberRanking[getHighestSetNumber(handB, 2)]
-  }
-}
-
-function getHighestSetNumber(hand, number) {
-  let handNumbers = hand.map(card => card.number);
-  let numberGroup = getNumberGroup(handNumbers);
-
-  let highest = 0;
-  for(let num of Object.keys(numberGroup)) {
-    if(numberGroup[num] == number) {
-      if(numberRanking[num] < (numberRanking[highest] ?? 14)) {
-        highest = num
-      }
-    }
-  }
-  return highest;
-}
-
-function getHighestRank(hand) {
-  let handNumbers = hand.map(card => card.number);
-  let handTypes = hand.map(card => card.type);
-
-  if(isRoyalFlush(hand, handNumbers, handTypes)) {
-    return 1;
-  }
-  if(isStraightFlush(hand, handNumbers, handTypes)) {
-    return 2;
-  }
-  if(isFourOfAKind(hand, handNumbers, handTypes)) {
-    return 3;
-  }
-  if(isFullHouse(hand, handNumbers, handTypes)) {
-    return 4;
-  }
-  if(isFlush(hand, handNumbers, handTypes)) {
-    return 5;
-  }
-  if(isStraight(hand, handNumbers, handTypes)) {
-    return 6;
-  }
-  if(isThreeOfAKind(hand, handNumbers, handTypes)) {
-    return 7;
-  }
-  if(isTwoPair(hand, handNumbers, handTypes)) {
-    return 8;
-  }
-  if(isPair(hand, handNumbers, handTypes)) {
-    return 9;
-  }
-  return 10;
-}
-
-// must be ordered from highest to lowest
-function getHighestCard(hand) {
-  return hand[0]
-}
-
-function sortHand(hand) {
-  return hand.sort((a, b) => numberRanking[a.number] - numberRanking[b.number]) 
-}
-
-function isRoyalFlush(hand,  handNumbers, handTypes) {
-  // isFlush(hand) and is ['A', 'K', 'Q', 'J', 10]
-  for(let number of ['A', 'K', 'Q', 'J', 10]) {
-    if(!handNumbers.includes(number)) {
-      return false
-    }
-  }
-  return isFlush(hand, handNumbers, handTypes);
-}
-
-// expects sorted hand based on rank small > big (A, K, Q .. )
-function isStraightFlush(hand,  handNumbers, handTypes) {
-  // isFlush(hand) and isStraight(hand)
-  return isFlush(hand, handNumbers, handTypes) && isStraight(hand, handNumbers, handTypes);
-}
-
-function isFourOfAKind(hand, handNumbers, handTypes) {
-  // count for each number the occurence, if one occurence is 4 then true
-  let numberGroup = getNumberGroup(handNumbers);
-
-  return isInNumberGroup(numberGroup, 4, 1);
-}
-
-// hand.length > 0
-// expects sorted hand based on rank small > big (A, K, Q .. )
-function isFullHouse(hand, handNumbers, handTypes) {
-  // three of kind and pair
-  return (isThreeOfAKind([...hand.slice(0, 3)], [...handNumbers.slice(0, 3)]) && isPair([...hand.slice(3, 5)], [...handNumbers.slice(3, 5)])) || 
-         (isPair([...hand.slice(0,2)], [...handNumbers.slice(0, 2)]) && isThreeOfAKind([...hand.slice(2, 5)], [...handNumbers.slice(2, 5)]))
-}
-
-// hand.length > 0
-function isFlush(hand, handNumbers, handTypes) {
-  // check if all the types are the same as the first one
-  let type = handTypes[0];
-  for(let i = 1; i < hand.length; i++) {
-    if(handTypes[i] != type) {
-      return false;
-    }
-  }
-  return true;
-}
-
-// FIX: Should also consider ace as 1!
-// hand.length > 0
-// expects sorted hand based on rank small > big (A, K, Q .. )
-function isStraight(hand, handNumbers, handTypes) {
-  for(let i = 1; i < hand.length; i++) {
-    if(numberRanking[handNumbers[i]] != numberRanking[handNumbers[i-1]] + 1) {
-      return false
-    }
-  }
-  return true;
-}
-
-function isThreeOfAKind(hand, handNumbers, handTypes) {
-  let numberGroup = getNumberGroup(handNumbers);
-
-  return isInNumberGroup(numberGroup, 3, 1);
-}
-
-  // fails if there are 3 or more of the same card, but that shouldn't be tested since isThreeOfAKind is checked before isTwoPair
-function isTwoPair(hand, handNumbers, handTypes) {
-  let numberGroup = getNumberGroup(handNumbers);
-
-  return isInNumberGroup(numberGroup, 2, 2);
-}
-
-function isPair(hand, handNumbers, handTypes) {
-  let numberGroup = getNumberGroup(handNumbers);
-
-  return isInNumberGroup(numberGroup, 2, 1);
-}
-
-function getNumberGroup(handNumbers) {
-  let numberGroup = {}
-  handNumbers.reduce((group, number) => {
-    group[number] = group[number] ? group[number] + 1 : 1;
-    return group
-  }, numberGroup)
-  return numberGroup
-}
-
-function isInNumberGroup(numberGroup, number, amount) {
-  let currentAmount = 0;
-  for(let num of Object.keys(numberGroup)) {
-    if(numberGroup[num] == number) {
-      currentAmount++;
-    }
-  }
-  return currentAmount >= amount;
-}
-
-
