@@ -253,35 +253,6 @@ export default function Table(props) {
         <CardStack cards={props.cardStack} />
       </CardStackContainer>
       <PlayerHand
-        playerHand={props.players[0]}
-        coinValues={props.coinValues[0]}
-        playerState={props.playerStates[0]}
-        bigBlind={props.bigBlind == 0}
-        smallBlind={props.smallBlind == 0}
-        turn={props.turn == 0}
-        mainPlayer={true}
-        playerName={props.playerNames[0]}
-        turnMessage={props.turnMessages[0]}
-        row={3}
-        column={2}
-        rotate={0}
-      />
-      <PlayerHand
-        playerHand={props.players[1]}
-        coinValues={props.coinValues[1]}
-        playerState={props.playerStates[1]}
-        bigBlind={props.bigBlind == 1}
-        smallBlind={props.smallBlind == 1}
-        turn={props.turn == 1}
-        mainPlayer={false}
-        playerName={props.playerNames[1]}
-        turnMessage={props.turnMessages[1]}
-        row={2}
-        column={1}
-        rotate={90}
-        fixRotate={true}
-      />
-      <PlayerHand
         playerHand={props.players[2]}
         coinValues={props.coinValues[2]}
         playerState={props.playerStates[2]}
@@ -312,6 +283,35 @@ export default function Table(props) {
         fixRotate={true}
       />
       <TableMiddle row={2} column={2} cardRiver={props.cardRiver} coinStack={props.coinStack} coinStackValue={props.coinStackValue} />
+      <PlayerHand
+        playerHand={props.players[0]}
+        coinValues={props.coinValues[0]}
+        playerState={props.playerStates[0]}
+        bigBlind={props.bigBlind == 0}
+        smallBlind={props.smallBlind == 0}
+        turn={props.turn == 0}
+        mainPlayer={true}
+        playerName={props.playerNames[0]}
+        turnMessage={props.turnMessages[0]}
+        row={3}
+        column={2}
+        rotate={0}
+      />
+      <PlayerHand
+        playerHand={props.players[1]}
+        coinValues={props.coinValues[1]}
+        playerState={props.playerStates[1]}
+        bigBlind={props.bigBlind == 1}
+        smallBlind={props.smallBlind == 1}
+        turn={props.turn == 1}
+        mainPlayer={false}
+        playerName={props.playerNames[1]}
+        turnMessage={props.turnMessages[1]}
+        row={2}
+        column={1}
+        rotate={90}
+        fixRotate={true}
+      />
     </TableContainer>
   );
 }

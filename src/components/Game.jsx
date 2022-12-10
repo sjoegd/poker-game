@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import styled from 'styled-components';
 import { evaluateHand, compareHandInfos, getRankOfHandOfFive } from '../helpers/HandEval';
 import henk from '../bots/henk/henk.js';
-import henk_v2 from '../bots/henk_v2/henk_v2.js'
+import henk_v2 from '../bots/henk_v2/henk_v2.js'; // bot
 
 import Table from './Table';
 
@@ -36,13 +36,13 @@ const RaiseSlideContainer = styled.div`
   margin-left: 19.75rem;
   outline: none;
   margin-top: 0.25rem;
-`
+`;
 
 const RaiseInput = styled.input`
   appearance: none;
   background: rgb(225, 225, 225);
   opacity: 0.7;
-  transition: opacity .2s;
+  transition: opacity 0.2s;
   border-radius: 1rem;
   width: 8rem;
   height: 0.75rem;
@@ -60,7 +60,7 @@ const RaiseInput = styled.input`
     border-radius: 1rem;
     cursor: w-resize;
   }
-`
+`;
 
 const RaiseInputShower = styled.div`
   width: 8rem;
@@ -68,7 +68,7 @@ const RaiseInputShower = styled.div`
   font-weight: 500;
   font-size: 1.2rem;
   user-select: none;
-`
+`;
 
 const WinnerShow = styled.div`
   position: fixed;
@@ -87,15 +87,15 @@ let cardTypes = ['club', 'heart', 'diamond', 'spade'];
 let cardNumbers = ['A', 2, 3, 4, 5, 6, 7, 8, 9, 10, 'J', 'Q', 'K'];
 
 let baseCoins = {
-  black: 10,
-  darkblue: 10,
+  black: 4,
+  darkblue: 6,
   darkgreen: 10,
   darkred: 10,
 };
 
 let coinValues = {
-  black: 1000,
-  darkblue: 750,
+  black: 2500,
+  darkblue: 1250,
   darkgreen: 500,
   darkred: 250,
 };
@@ -109,13 +109,31 @@ let coinTypes = ['black', 'darkblue', 'darkgreen', 'darkred'];
 
 /**
  * TODO:
- * open cards of playersLeft when determining winner (and take some time on open and show winner)
- * Upgrade AI
+ *
+ * Bug: when a player goes all-in, every should only be able to call...
+ * How to fix: state with all-in, that makes sure only call can be used, this probably fixed everything
+ * Also make a special turn message for all-ins
+ *
+ * Possible bug still (Probably fixed though)
+ * When a player calls an all-in off other player, that players call wasn't taken into account when calculating endRound stuff so total money raised above 100000
+ *
+ * open cards of playersLeft when determining winner (and take some time on open and show winner) maybe show turn message Winner above player
+ * ^^ TEST THIS (implemented sort of)
+ * BUG: TOP CARD ON CARD STACK OPENS??? (when: ALL-IN pre-river, card opens but isn't put on the river, it stays on the fucking cardstack somehow? )
+ *
+ * Upgrade AI (actually train one with 'counterfactual reget?')
+ * Graphic: Stacks should split in 2 if they become to big (what is big?)
+ * Make sure all-ins are measured, and people cannot raise when their enemies have no money left
+ * Create a start new game button and remove the auto game restart
+ * Don't let it instant restart in production when game is over
+ * When All-in is active, let cards be opened slowly not instantly
+ * and open player cards ^
+ * +amount of money won for winner
  *
  * gets:
  * updateData = f
  * createNewGame = f
- * 
+ *
  * @returns Component that manages the Game
  */
 
@@ -213,13 +231,13 @@ export default function Game(props) {
       setGameOver(true);
       setWinner(winner);
       props.updateData(allData);
-      props.createNewGame();
+      props.createNewGame(); // update
     }
   }, [currentCycle, effectListener]);
 
   // Bots
 
-  // Temp for data generation
+  // For automatic bot games
   // useEffect(() => {
   //   if (!startDisabled) {
   //     startNewRound();
@@ -234,7 +252,7 @@ export default function Game(props) {
     }
     // (currentTurn % 4 != 0)
     // time should be 2000
-    if ((currentTurn % 4 != 0) && startDisabled) {
+    if (currentTurn % 4 != 0 && startDisabled) {
       setTimeout(() => generateTurnAction(), 2000);
     }
   }, [currentTurn, startDisabled, gameOver, effectListener]);
@@ -244,7 +262,7 @@ export default function Game(props) {
   let [allData, setAllData] = useState([]);
 
   // For raising
-  let [minRaise, setMinRaise] = useState(getRaise(0))
+  let [minRaise, setMinRaise] = useState(getRaise(0));
   let [currentRaiseInput, setCurrentRaiseInput] = useState(minRaise);
 
   return (
@@ -297,25 +315,36 @@ export default function Game(props) {
         {isCheckOrBet(0) ? 'Bet' : 'Raise'}
       </RaiseButton>
       <RaiseSlideContainer>
-        <RaiseInput type='range' step={(coinValues['darkred'] / getTotalChips(player1)) * 100} min={(minRaise / getTotalChips(player1)) * 100} max={100.1} value={(currentRaiseInput / getTotalChips(player1)) * 100} onInput={(event) => setCurrentRaiseInput((event.target.value / 100) * getTotalChips(player1))}/>
-        <RaiseInputShower>{Math.min(Math.max(0, Math.round(currentRaiseInput)) + (currentBet - player1Bet), getTotalChips(player1))}</RaiseInputShower>
+        <RaiseInput
+          type="range"
+          step={(coinValues['darkred'] / getTotalChips(player1)) * 100}
+          min={(minRaise / getTotalChips(player1)) * 100}
+          max={100.1}
+          value={(currentRaiseInput / getTotalChips(player1)) * 100}
+          onInput={event => setCurrentRaiseInput((event.target.value / 100) * getTotalChips(player1))}
+        />
+        <RaiseInputShower>
+          {Math.min(Math.max(0, Math.round(currentRaiseInput)) + (currentBet - player1Bet), getTotalChips(player1))}
+        </RaiseInputShower>
       </RaiseSlideContainer>
     </GameContainer>
   );
-  
+
   function isCheckOrBet(id) {
-    let {playerBet} = playerIDs[id]
-    return currentTurn == id && playerBet == currentBet
+    let { playerBet } = playerIDs[id];
+    return currentTurn == id && playerBet == currentBet;
   }
 
   function getRaise(id, newCurrentBet) {
     let { player, playerBet } = playerIDs[id ?? currentTurn];
-    let raise = Math.min(getTotalChips(player) + playerBet - (newCurrentBet ?? currentBet),  (newCurrentBet ?? currentBet) ?  (newCurrentBet ?? currentBet) : minimalBet);
+    let raise = Math.min(
+      getTotalChips(player) + playerBet - (newCurrentBet ?? currentBet),
+      newCurrentBet ?? currentBet ? newCurrentBet ?? currentBet : minimalBet
+    );
     return raise;
   }
 
   function isRaiseDisabled() {
-    // playerBet + totalChips <= currentBet
     let { player, playerBet } = playerIDs[currentTurn];
     let totalChips = getTotalChips(player);
     return totalChips <= currentBet - playerBet || totalChips == 0;
@@ -376,7 +405,7 @@ export default function Game(props) {
 
   function drawRiverCards(amount, currentCardRiver, currentCardStack) {
     for (let i = 0; i < amount; i++) {
-      if(currentCardRiver.length == 5) {
+      if (currentCardRiver.length == 5) {
         return;
       }
       currentCardRiver.push(currentCardStack.pop());
@@ -498,34 +527,50 @@ export default function Game(props) {
     let { player, setPlayer, playerBet, playerState, setPlayerState } = playerIDs[id];
 
     let otherPlayerStates = [];
+    let otherPlayerCoins = [];
+
     for (let i = 0; i < 4; i++) {
       if (i == id) {
         continue;
       }
 
-      let { playerState: otherPlayerState, setPlayerState: setOtherPlayerState } = playerIDs[i];
+      let {
+        player: { playerCoins },
+        playerState: otherPlayerState,
+        setPlayerState: setOtherPlayerState,
+      } = playerIDs[i];
       otherPlayerStates.push({ id: i, playerState: otherPlayerState, setPlayerState: setOtherPlayerState });
+      otherPlayerCoins.push({ id: i, playerCoins });
     }
 
     let currentPlayer = { ...player };
     let currentPlayerBet = { playerBet }; // make object of them so that it copies by reference
     let currentPlayerState = { playerState };
     let { playerCoins, playerHand } = currentPlayer;
+    let currentPlayerCoins = { ...playerCoins };
 
     switch (move) {
       case 'fold':
         handleFold(currentPlayerState);
         break;
       case 'call':
-        handleCall(id, currentCoinStack, currentPlayerState, playerCoins, currentPlayerBet);
+        handleCall(id, currentCoinStack, currentPlayerState, currentPlayerCoins, currentPlayerBet);
         break;
       case 'raise':
-        amount = handleRaise(id, currentCoinStack, currentPlayerState, playerCoins, currentPlayerBet, otherPlayerStates, amount);
+        amount = handleRaise(
+          id,
+          currentCoinStack,
+          currentPlayerState,
+          currentPlayerCoins,
+          currentPlayerBet,
+          otherPlayerStates,
+          amount
+        );
         break;
     }
 
     setCoinStack(currentCoinStack);
-    setPlayer({ playerCoins, playerHand });
+    setPlayer({ playerCoins: currentPlayerCoins, playerHand });
     setPlayerState(currentPlayerState.playerState);
 
     for (let { playerState: otherPlayerState, setPlayerState: setOtherPlayerState } of otherPlayerStates) {
@@ -535,7 +580,8 @@ export default function Game(props) {
     handleTurnFinish(
       id,
       [...otherPlayerStates, { id, playerState: currentPlayerState.playerState, setPlayerState }],
-      currentCoinStack
+      currentCoinStack,
+      [...otherPlayerCoins, { id, playerCoins: currentPlayerCoins }]
     );
     // handle turn message:
     setTurnMessage(id, move, amount);
@@ -582,7 +628,7 @@ export default function Game(props) {
 
     setCurrentBet(newBet);
     setMinRaise(getRaise(0, newBet));
-    setCurrentRaiseInput(getRaise(0, newBet))
+    setCurrentRaiseInput(getRaise(0, newBet));
 
     for (let otherPlayerState of otherPlayerStates) {
       if (otherPlayerState.playerState != 'folded' && otherPlayerState.playerState != 'out') {
@@ -594,14 +640,14 @@ export default function Game(props) {
     return amount;
   }
 
-  function handleTurnFinish(id, playerStates, currentCoinStack) {
+  function handleTurnFinish(id, playerStates, currentCoinStack, allPlayerCoins) {
     let playersLeft = getNotFoldedPlayerIDs(playerStates);
 
     // Check if round is over and handle it
     let roundDone = playersLeft.length == 1;
 
     if (roundDone) {
-      endRound(playersLeft[0], currentCoinStack);
+      endRound(playersLeft[0], currentCoinStack, allPlayerCoins);
       return;
     }
 
@@ -614,7 +660,7 @@ export default function Game(props) {
     }
 
     if (cycleDone) {
-      handleCycleFinish(currentCycle, playersLeft, currentCoinStack, playerStates);
+      handleCycleFinish(currentCycle, playersLeft, currentCoinStack, playerStates, allPlayerCoins);
       return;
     }
 
@@ -641,7 +687,7 @@ export default function Game(props) {
   }
 
   // if someone is all-in, go to the last round instantly
-  function handleCycleFinish(oldCycle, playersLeft, currentCoinStack, playerStates) {
+  function handleCycleFinish(oldCycle, playersLeft, currentCoinStack, playerStates, allPlayerCoins) {
     // cycleOrder = ['beginning', 'round1', 'round2', 'round3', 'finished']
     // beginning: 3 mid cards closed, round1 open mid 3 cards, round2 add open 4th card, round3 add open 5th card, finished everyone left shows hand and winner determined
 
@@ -652,18 +698,18 @@ export default function Game(props) {
       let { setPlayerState } = playerIDs[id];
       setPlayerState('noturn');
     }
-
     // check if allIn cycle
-    let allInPlayer = false
-    for(let {id, playerState} of playerStates) {
-      let {player: {playerCoins}} = playerIDs[id]
-      if(getTotalChips({playerCoins}) == 0 && playerState != "out" && playerState != "folded") {
-        allInPlayer = true
+    let allInPlayer = false;
+    for (let { id, playerState } of playerStates) {
+      let playerCoins = allPlayerCoins.find(playerC => playerC.id == id).playerCoins;
+      // let {player: {playerCoins}} = playerIDs[id]
+      if (getTotalChips({ playerCoins }) == 0 && playerState != 'out' && playerState != 'folded') {
+        allInPlayer = true;
       }
     }
 
-    if(allInPlayer && oldCycle != 3) {
-      handleAllInCycle(currentCardRiver, currentCardStack, currentCoinStack, playersLeft);
+    if (allInPlayer && oldCycle != 3) {
+      handleAllInCycle(currentCardRiver, currentCardStack, currentCoinStack, playersLeft, allPlayerCoins);
       return;
     }
 
@@ -692,8 +738,10 @@ export default function Game(props) {
         break;
       case 3:
         // Game is finished, determine winner end round
-        let winner = determineWinner(playersLeft, currentCardRiver);
-        endRound(winner, currentCoinStack);
+        let winner = determineWinner(playersLeft, currentCardRiver, allPlayerCoins);
+        setTimeout(() => endRound(winner, currentCoinStack, allPlayerCoins), 4000);
+        return;
+      // endRound(winner, currentCoinStack);
     }
   }
 
@@ -711,27 +759,35 @@ export default function Game(props) {
     setCurrentCycle(oldCycle + 1);
   }
 
-  function handleAllInCycle(currentCardRiver, currentCardStack, currentCoinStack, playersLeft) {
-    drawRiverCards(5 - currentCardRiver.length, currentCardRiver, currentCardStack)
+  function handleAllInCycle(currentCardRiver, currentCardStack, currentCoinStack, playersLeft, allPlayerCoins) {
+    drawRiverCards(5 - currentCardRiver.length, currentCardRiver, currentCardStack);
     flipRiverCards(currentCardRiver, false, 5);
-    let winner = determineWinner(playersLeft, currentCardRiver);
-    endRound(winner, currentCoinStack);
+    setCardRiver(currentCardRiver);
+    setCardStack(currentCardStack);
+    let winner = determineWinner(playersLeft, currentCardRiver, allPlayerCoins);
+    setTimeout(() => endRound(winner, currentCoinStack, allPlayerCoins), 4000);
+    // endRound(winner, currentCoinStack);
   }
 
   // playersLeft must be > 0
-  function determineWinner(playersLeft, currentCardRiver) {
+  function determineWinner(playersLeft, currentCardRiver, allPlayerCoins) {
     let playerRankings = [];
 
     for (let player of playersLeft) {
       let {
         player: { playerHand },
+        setPlayer,
       } = playerIDs[player];
+      playerHand = playerHand.map(card => {
+        let card_copy = { ...card };
+        card_copy.backwards = false;
+        return card_copy;
+      });
+      let actualPlayerCoins = allPlayerCoins.find(pc => pc.id == player).playerCoins;
+      setPlayer({ playerCoins: actualPlayerCoins, playerHand });
       let highestHand = getHighestHand(playerHand, currentCardRiver);
-      // console.log({highestHand})
       playerRankings.push({ id: player, highestHand });
     }
-
-    // Comparison should be different: look evaluateHand()
 
     let winner = playerRankings[0];
     for (let player of playerRankings) {
@@ -739,20 +795,19 @@ export default function Game(props) {
         winner = { ...player };
       }
     }
-
-    // console.log({winner})
-
     return winner.id;
   }
 
   function getHighestHand(playerHand, currentCardRiver) {
     let fullHand = [...playerHand, ...currentCardRiver];
-    // console.log({fullHand})
     return evaluateHand(fullHand);
   }
 
   // not certain whether the state variables will be correct here...
-  function endRound(winnerId, currentCoinStack) {
+  function endRound(winnerId, currentCoinStack, allPlayerCoins) {
+    // set turn message of the winner
+    setTurnMessage(winnerId, 'Winner');
+
     // handle roundData
     currentRoundData.forEach(data => {
       data.won = data.playerID == winnerId;
@@ -769,14 +824,23 @@ export default function Game(props) {
 
     let players = [];
 
+    // Change this so that player gets playerCoins from call
     for (let i = 0; i < 4; i++) {
-      let { player, setPlayer, playerBet, setPlayerBet, playerState, setPlayerState } = playerIDs[i];
-      players.push({ player, setPlayer, playerBet, setPlayerBet, playerState, setPlayerState });
+      let {
+        player: { playerHand },
+        setPlayer,
+        playerBet,
+        setPlayerBet,
+        playerState,
+        setPlayerState,
+      } = playerIDs[i];
+      let actualPlayer = { playerHand, playerCoins: allPlayerCoins.find(pc => pc.id == i).playerCoins };
+      players.push({ player: actualPlayer, setPlayer, playerBet, setPlayerBet, playerState, setPlayerState });
     }
 
     // give winner the coinStack and remove his cards, clear the coinStack
     let { player, setPlayer } = players[winnerId];
-    let { playerCoins, playerHand } = player;
+    let { playerCoins, playerHand } = { ...player };
 
     for (let coinType of coinTypes) {
       playerCoins[coinType] += currentCoinStack[coinType];
@@ -787,7 +851,7 @@ export default function Game(props) {
 
     setPlayer({ playerCoins, playerHand });
 
-    // clear cardRiver and remake the cardStack
+    // clear cardRiver and remake the cardStack, currentCoinStack
 
     currentCardRiver = [];
     currentCardStack = shuffleCardStack(getFreshCardStack());
@@ -857,7 +921,7 @@ export default function Game(props) {
     setMinimalBet(coinValues['darkred'] * 2);
     setCurrentBet(coinValues['darkred'] * 2);
     setMinRaise(getRaise(0, coinValues['darkred'] * 2));
-    setCurrentRaiseInput(getRaise(0, coinValues['darkred'] * 2))
+    setCurrentRaiseInput(getRaise(0, coinValues['darkred'] * 2));
 
     // clear currentCycle
     setCurrentCycle(0);
@@ -911,54 +975,62 @@ export default function Game(props) {
     let outputCall;
     let outputRaise;
 
-    if(currentTurn != 0) {
+    if (currentTurn != 0) {
       // use henk_v2
       outputCall = henk_v2(inputCall).won;
       outputRaise = henk_v2(inputRaise).won;
-    } 
+    }
     // use normal henk
     // outputCall = henk(inputCall).won;
     // outputRaise = henk(inputRaise).won;
 
     // calculate amount i have to pay with raise/call
-    let toCallPercentage = (currentBet - playerBet) / getTotalChips({playerCoins});
-    let toRaisePercentage = ((currentBet * 2) - playerBet) / getTotalChips({playerCoins})
+    let toCallPercentage = (currentBet - playerBet) / getTotalChips({ playerCoins });
+    let toRaisePercentage = (currentBet * 2 - playerBet) / getTotalChips({ playerCoins });
 
-    let isWorthItCall = 1 - toCallPercentage
-    let isWorthItRaise = 1 - toRaisePercentage
+    let isWorthItCall = 1 - toCallPercentage;
+    let isWorthItRaise = 1 - toRaisePercentage;
 
-    let isNotWorthItCall = false
-    let isNotWorthItRaise = false
+    let isNotWorthItCall = false;
+    let isNotWorthItRaise = false;
 
-    if(isWorthItCall < 0.5 && outputCall < 0.8) {
+    if (isWorthItCall < 0.5 && outputCall < 0.8) {
       // i want to be pretty certain i win if i spent more than halve my money..
-      isNotWorthItCall = true
-    } 
+      isNotWorthItCall = true;
+    }
 
-    if(isWorthItRaise < 0.5 && outputRaise < 0.8) {
+    if (isWorthItRaise < 0.5 && outputRaise < 0.8) {
       // i want to be pretty certain i win if i spent more than halve my money..
-      isNotWorthItRaise = true
+      isNotWorthItRaise = true;
     }
 
     if (outputCall > 0.6 || outputRaise > 0.6) {
       // theres a higher chance that i am winning than losing
 
       // call for sure
-      if(outputCall > 0.95) {
+      if (outputCall > 0.95) {
         handleTurn(currentTurn, 'call');
+        return;
       }
       // raise for sure
-      if(outputRaise > 0.95 && !isRaiseDisabled()) {
-        handleTurn(currentTurn, 'raise', getRaise());
-      }
-      // raise with if good call
-      if ((outputRaise > outputCall && outputRaise > 0.7) && !isRaiseDisabled() && !isNotWorthItRaise) {
+      if (outputRaise > 0.95 && !isRaiseDisabled()) {
         handleTurn(currentTurn, 'raise', getRaise());
         return;
-      } 
+      }
+      // raise with if good call
+      if (outputRaise > outputCall && outputRaise > 0.7 && !isRaiseDisabled() && !isNotWorthItRaise) {
+        handleTurn(currentTurn, 'raise', getRaise());
+        return;
+      }
       // now im pretty sure raising is not the best option so its probably better to call
       // but only if i dont spend to much money with a bad win chance
-      if(!isNotWorthItCall && (currentBet == playerBet || playerState != "mustRaise" || getTotalChips({playerCoins}) == 0 || outputCall > 0.6)) {
+      if (
+        !isNotWorthItCall &&
+        (currentBet == playerBet ||
+          playerState != 'mustRaise' ||
+          getTotalChips({ playerCoins }) == 0 ||
+          outputCall > 0.6)
+      ) {
         handleTurn(currentTurn, 'call');
         return;
       }
@@ -971,9 +1043,15 @@ export default function Game(props) {
       // note that for this to work, the data should consider blufffer previous turns
       // ** bluff code **
 
-      // check to see if the call is a check (no money lost)
-      if(!isNotWorthItCall && (currentBet == playerBet || playerState != "mustRaise" || getTotalChips({playerCoins}) == 0 || outputCall > 0.6)) {
-        // in that case i always call, since it pointless to fold on a check
+      // check to see if the call is a check or viable
+      if (
+        !isNotWorthItCall &&
+        (currentBet == playerBet ||
+          playerState != 'mustRaise' ||
+          getTotalChips({ playerCoins }) == 0 ||
+          outputCall > 0.6)
+      ) {
+        // in that case i always call, since it pointless to fold on a check or a mostly winning
         handleTurn(currentTurn, 'call');
         return;
       }
@@ -996,6 +1074,8 @@ export default function Game(props) {
       case 'raise':
         setPlayerTurnMessage(isCheckOrBet(id) ? `Bet ${amount}` : `Raised ${amount}`);
         break;
+      default:
+        setPlayerTurnMessage(turn);
     }
     setTimeout(() => clearTurnMessage(id), 1500);
   }
